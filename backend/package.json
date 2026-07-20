@@ -1,0 +1,33 @@
+{
+  "name": "@actp/backend",
+  "version": "0.1.0",
+  "description": "ACTP backend: chain indexer, metadata service (V3), contract intelligence (V4), risk engine (V5), REST API",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "test": "vitest run --exclude '**/e2e/**'",
+    "e2e": "vitest run --config vitest.e2e.config.ts"
+  },
+  "dependencies": {
+    "@actp/core": "*",
+    "@anthropic-ai/sdk": "^0.112.3",
+    "@electric-sql/pglite": "^0.2.17",
+    "fastify": "^5.2.0",
+    "pg": "^8.13.0",
+    "viem": "^2.21.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@actp/sdk": "^0.1.0",
+    "@types/node": "^22.10.0",
+    "@types/pg": "^8.11.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

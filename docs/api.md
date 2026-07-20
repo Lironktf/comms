@@ -1,0 +1,85 @@
+# ACTP REST API
+
+Base path `/v1`. Reads are public. Mutating endpoints require `x-api-key: <ADMIN_API_KEY>`
+when the backend is configured with one (open in dev mode).
+
+All `vendorId` path params are `0x`-prefixed 32-byte hex (`keccak256(scheme, domainHash)`).
+Errors are `{ "error": "<message>" }` with a matching HTTP status (422 validation, 404 not
+found, 401 auth, 409 conflict, 413 too large).
+
+## Health
+
+```
+GET /health -> { "status": "ok" }
+```
+
+## Vendors (V1/V2)
+
+```
+GET /v1/vendors                      # list (?limit, ?offset)
+GET /v1/vendors?domain=acme.example  # resolve by domain  -> { vendor }
+GET /v1/vendors?wallet=0x…           # resolve by wallet   -> { vendor }  (primary x402 check)
+GET /v1/vendors/:vendorId            -> { vendor }
+GET /v1/vendors/:vendorId/attestations -> { attestations: [...] }
+```
+
+`vendor` includes `owner`, `status` (`active|suspended|revoked`), `domains[]`, `wallets[]`,
+`x402Endpoint`, `metadataHash`, `metadataVersion`, `contractMetadataHash`,
+`verificationLevel` (0–5, computed from live attestations), and timestamps. Unknown
+domain/wallet/vendor → **404** (fail closed).
+
+## Metadata (V3)
+
+```
+PUT /v1/vendors/:vendorId/metadata     # body: merchant metadata document (admin)
+   -> 201 { version, canonicalHash, cid, uri, next_step }
+GET /v1/vendors/:vendorId/metadata
+   -> { vendorId, version, document, canonicalHash, cid, ipfsAvailable, createdAt, integrity }
+GET /ipfs/:cid                          # content-addressed gateway -> raw document bytes
+```
+
+`integrity` ∈ `verified` (document hash equals onchain anchor) · `not_anchored` (stored but
+not yet anchored, or anchor points at a different stored version) · `hash_mismatch` (stored
+document does not match its recorded hash — untrusted) · `no_document`.
+
+The document is stored content-addressed (IPFS raw block); `cid` is its CIDv1 and `uri` is
+`ipfs://<cid>`. After `PUT`, the vendor owner anchors `canonicalHash` **and** sets the URI to
+`uri` onchain via `VendorRegistry.setMetadata`. `ipfsAvailable` reports whether the document
+is currently retrievable from the content-addressed store. `GET /ipfs/:cid` is a caching
+gateway that re-verifies bytes against the CID before serving; clients re-verify regardless.
+
+**Trustless retrieval** (no operator trust): read the CID from the onchain `metadataURI`,
+fetch `<gateway>/ipfs/<cid>` from any IPFS gateway, and verify against both the content
+address and the onchain keccak anchor. The SDK's `getMetadataTrustless` does exactly this.
+
+## Contract intelligence (V4)
+
+```
+POST /v1/vendors/:vendorId/contract-documents   # { content, docType?, sourceUrl? } (admin)
+   -> 201 { vendorId, documentHash, terms, extractor, extractorVersion, createdAt, merchantAnchored }
+GET  /v1/vendors/:vendorId/contract-terms
+   -> { terms, merchantAnchored, ... }
+```
+
+Each term in `terms` carries `{ value, confidence (0–1), source, references[], requiresReview? }`.
+`source` ∈ `merchant_declared | verifier_attested | ai_extracted | deterministic_parse`.
+`merchantAnchored` is `true` only when the vendor owner anchored that exact document hash
+onchain — otherwise the terms are **information, not verified fact**.
+
+## Risk (V5)
+
+```
+GET  /v1/vendors/:vendorId/risk           # evaluate now + persist
+   -> { vendorId, riskLevel, score, reasons[], rulesetVersion, evaluatedAt, inputsSnapshotHash }
+GET  /v1/vendors/:vendorId/risk/history   # ?limit -> { history: [...] }
+POST /v1/vendors/:vendorId/risk-signals   # { signal, value, source } (admin)
+   -> 204
+```
+
+`riskLevel` ∈ `low | medium | high | critical`. Each entry in `reasons` is
+`{ rule, weight, evidence }`. Scores are comparable only within a `rulesetVersion`.
+`inputsSnapshotHash` lets any consumer recompute the score from the same signals.
+
+Accepted `signal` names (external observations): `domain_age_days`, `wallet_age_days`,
+`wallet_flagged`, `sanctions_match`, `phishing_reports`, `security_incidents`,
+`refund_complaints`.

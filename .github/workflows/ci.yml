@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: Install OpenZeppelin (npm)
+        working-directory: contracts
+        run: npm install --no-audit --no-fund
+      - name: Build contracts
+        working-directory: contracts
+        run: forge build --sizes
+      - name: Test contracts (fuzz + invariant, CI profile)
+        working-directory: contracts
+        run: FOUNDRY_PROFILE=ci forge test -vvv
+      - name: Solhint
+        working-directory: contracts
+        run: npx --yes solhint 'src/**/*.sol'
+      - name: Slither
+        uses: crytic/slither-action@v0.4.0
+        continue-on-error: true
+        with:
+          target: contracts/
+          slither-config: contracts/slither.config.json
+
+  typescript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - name: Build (core, sdk, backend)
+        run: npm run build
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Unit + integration tests
+        run: npm test
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: foundry-rs/foundry-toolchain@v1
+      - run: npm install --no-audit --no-fund
+      - name: Build
+        run: npm run build
+      - name: End-to-end (anvil -> deploy -> indexer -> API -> SDK)
+        run: npm run e2e -w backend

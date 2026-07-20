@@ -1,0 +1,23 @@
+{
+  "name": "actp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agentic Commerce Trust Protocol — vendor identity, verification, metadata, contract intelligence, and risk infrastructure for autonomous purchasing",
+  "license": "Apache-2.0",
+  "workspaces": [
+    "packages/core",
+    "backend",
+    "sdk"
+  ],
+  "scripts": {
+    "build": "npm run build -w packages/core -w sdk -w backend",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "test:contracts": "cd contracts && forge test",
+    "e2e": "npm run e2e -w backend"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
