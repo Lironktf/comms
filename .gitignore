@@ -24,3 +24,5 @@ solana/node_modules/
 .DS_Store
 *.log
 .diskcheck
+contracts/.deployer.testnet.env
+backend/.decision-key.pem
