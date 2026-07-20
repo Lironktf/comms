@@ -148,6 +148,138 @@ CREATE INDEX IF NOT EXISTS risk_scores_vendor_idx ON risk_scores (vendor_id, eva
 ALTER TABLE metadata_documents ADD COLUMN IF NOT EXISTS cid TEXT;
 `,
   },
+  {
+    id: "003_decision_layer",
+    sql: `
+-- ---------------------------------------------------------------- V7/V9 principals
+CREATE TABLE IF NOT EXISTS principals (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL CHECK (kind IN ('org','department','agent')),
+  parent_id TEXT REFERENCES principals (id),
+  org_id TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','suspended')),
+  policy_id TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS principals_parent_idx ON principals (parent_id);
+CREATE INDEX IF NOT EXISTS principals_org_idx ON principals (org_id);
+
+CREATE TABLE IF NOT EXISTS policies (
+  id TEXT PRIMARY KEY,
+  principal_id TEXT NOT NULL REFERENCES principals (id),
+  version TEXT NOT NULL,
+  document JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS policies_principal_idx ON policies (principal_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS delegations (
+  id TEXT PRIMARY KEY,
+  from_principal TEXT NOT NULL REFERENCES principals (id),
+  to_principal TEXT NOT NULL REFERENCES principals (id),
+  constraints JSONB NOT NULL,
+  revoked BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS delegations_to_idx ON delegations (to_principal) WHERE revoked = FALSE;
+
+-- ---------------------------------------------------------------- V6 budgets (cross-rail)
+CREATE TABLE IF NOT EXISTS budgets (
+  id TEXT PRIMARY KEY,
+  principal_id TEXT NOT NULL REFERENCES principals (id),
+  period TEXT NOT NULL CHECK (period IN ('day','month','total')),
+  currency TEXT NOT NULL,
+  limit_micros TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS budgets_principal_idx ON budgets (principal_id);
+
+-- A hold is placed on ALLOW (or approval) and settled on confirmation. Cross-rail: a card
+-- USD charge and a USDC x402 payment both normalize into amount_micros against the same budget.
+CREATE TABLE IF NOT EXISTS budget_holds (
+  id TEXT PRIMARY KEY,
+  budget_id TEXT NOT NULL REFERENCES budgets (id),
+  decision_id TEXT NOT NULL,
+  principal_id TEXT NOT NULL,
+  amount_micros TEXT NOT NULL,
+  original_currency TEXT NOT NULL,
+  original_micros TEXT NOT NULL,
+  rate TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('held','settled','released','expired')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  settled_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS budget_holds_budget_idx ON budget_holds (budget_id, status, created_at);
+CREATE INDEX IF NOT EXISTS budget_holds_decision_idx ON budget_holds (decision_id);
+
+-- ---------------------------------------------------------------- V12 decisions
+CREATE TABLE IF NOT EXISTS decisions (
+  id TEXT PRIMARY KEY,
+  request_id TEXT NOT NULL,
+  principal_id TEXT NOT NULL,
+  org_id TEXT NOT NULL,
+  rail TEXT NOT NULL,
+  amount JSONB NOT NULL,
+  outcome TEXT NOT NULL CHECK (outcome IN ('allow','deny','require_approval')),
+  vendor_id TEXT,
+  verification_level INTEGER,
+  risk_level TEXT,
+  risk_score INTEGER,
+  policy_version TEXT NOT NULL,
+  context_hash TEXT NOT NULL,
+  reasons JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS decisions_idempotency ON decisions (principal_id, request_id);
+CREATE INDEX IF NOT EXISTS decisions_org_idx ON decisions (org_id, created_at DESC);
+
+-- ---------------------------------------------------------------- V8 approvals
+CREATE TABLE IF NOT EXISTS approvals (
+  id TEXT PRIMARY KEY,
+  decision_id TEXT NOT NULL,
+  principal_id TEXT NOT NULL,
+  org_id TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('pending','approved','denied','expired')),
+  amount JSONB NOT NULL,
+  context JSONB NOT NULL,
+  token_payload JSONB NOT NULL,
+  requested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  resolved_at TIMESTAMPTZ,
+  resolver TEXT,
+  reason TEXT
+);
+CREATE INDEX IF NOT EXISTS approvals_org_idx ON approvals (org_id, status, requested_at DESC);
+
+-- ---------------------------------------------------------------- V13 receipts (hash chain)
+CREATE TABLE IF NOT EXISTS receipts (
+  id TEXT PRIMARY KEY,
+  org_id TEXT NOT NULL,
+  seq BIGINT NOT NULL,
+  prev_hash TEXT NOT NULL,
+  event TEXT NOT NULL CHECK (event IN ('decision','approval','settlement','dispute')),
+  payload JSONB NOT NULL,
+  hash TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS receipts_chain ON receipts (org_id, seq);
+CREATE INDEX IF NOT EXISTS receipts_org_idx ON receipts (org_id, seq DESC);
+
+-- ---------------------------------------------------------------- V10 settlements (reputation input)
+CREATE TABLE IF NOT EXISTS settlements (
+  id TEXT PRIMARY KEY,
+  decision_id TEXT NOT NULL,
+  vendor_id TEXT,
+  principal_id TEXT NOT NULL,
+  verification_level INTEGER NOT NULL DEFAULT 0,
+  outcome TEXT NOT NULL CHECK (outcome IN ('fulfilled','disputed','refunded','failed')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS settlements_vendor_idx ON settlements (vendor_id);
+`,
+  },
 ];
 
 export async function migrate(db: Db): Promise<void> {

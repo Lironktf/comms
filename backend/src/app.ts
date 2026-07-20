@@ -10,6 +10,14 @@ import {ContractIntelService} from "./services/contractIntel/service.js";
 import {DeterministicExtractor} from "./services/contractIntel/deterministic.js";
 import type {TermExtractor} from "./services/contractIntel/extractor.js";
 import {RiskEngine} from "./services/risk/engine.js";
+import {PrincipalService} from "./services/principals.js";
+import {BudgetService} from "./services/budgets.js";
+import {ApprovalService} from "./services/approvals.js";
+import {ReceiptService} from "./services/receipts.js";
+import {ReputationService} from "./services/reputation.js";
+import {DiscoveryService} from "./services/discovery.js";
+import {DecisionService} from "./services/decisions.js";
+import {TokenSigner} from "./crypto/tokens.js";
 import {buildServer, type AppServices} from "./api/server.js";
 
 export interface App {
@@ -46,7 +54,48 @@ export async function buildApp(
   const contractIntel = new ContractIntelService(db, extractor);
   const risk = new RiskEngine(db, vendors, metadata);
 
-  const services: AppServices = {db, vendors, metadata, contractIntel, risk, ipfs};
+  // --- V6–V14 decision layer ---
+  const {signer, ephemeral} = TokenSigner.fromPemOrEphemeral(config.DECISION_SIGNING_KEY);
+  if (ephemeral) {
+    // dev only: tokens won't verify across restarts or other instances
+    // eslint-disable-next-line no-console
+    console.warn("[actp] DECISION_SIGNING_KEY unset — using an ephemeral token key (dev only)");
+  }
+  const principals = new PrincipalService(db);
+  const budgets = new BudgetService(db, config.FX_RATES, config.DECISION_TOKEN_TTL_SECONDS);
+  const approvals = new ApprovalService(db);
+  const receipts = new ReceiptService(db);
+  const reputation = new ReputationService(db);
+  const discovery = new DiscoveryService(db, vendors, risk, reputation);
+  const decisions = new DecisionService(
+    db,
+    principals,
+    budgets,
+    risk,
+    vendors,
+    contractIntel,
+    approvals,
+    receipts,
+    signer,
+    config,
+  );
+
+  const services: AppServices = {
+    db,
+    vendors,
+    metadata,
+    contractIntel,
+    risk,
+    ipfs,
+    principals,
+    budgets,
+    approvals,
+    receipts,
+    reputation,
+    discovery,
+    decisions,
+    signer,
+  };
   const server = buildServer(services, config);
 
   let indexer: Indexer | null = null;

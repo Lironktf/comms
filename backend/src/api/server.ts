@@ -2,12 +2,21 @@ import Fastify, {type FastifyInstance} from "fastify";
 import {ZodError} from "zod";
 import type {AppConfig} from "../config.js";
 import type {Db} from "../db/client.js";
-import {computeCid, isValidCid} from "@actp/core";
+import {computeCid, formatAmount, isValidCid, parsePolicyText, renderPolicyText, validatePolicy, type PurchaseRequest} from "@actp/core";
 import {HttpError, MetadataService} from "../services/metadata.js";
 import {VendorService} from "../services/vendors.js";
 import {ContractIntelService} from "../services/contractIntel/service.js";
 import {RiskEngine} from "../services/risk/engine.js";
 import type {IpfsStore} from "../storage/ipfs.js";
+import type {PrincipalService} from "../services/principals.js";
+import type {BudgetService, BudgetPeriod} from "../services/budgets.js";
+import type {ApprovalService} from "../services/approvals.js";
+import type {ReceiptService} from "../services/receipts.js";
+import type {ReputationService} from "../services/reputation.js";
+import type {DiscoveryService} from "../services/discovery.js";
+import type {DecisionService} from "../services/decisions.js";
+import type {TokenSigner} from "../crypto/tokens.js";
+import {normalizeX402, normalizeAcp, normalizeCard, normalizeAp2} from "../rails/adapters.js";
 
 export interface AppServices {
   db: Db;
@@ -16,6 +25,14 @@ export interface AppServices {
   contractIntel: ContractIntelService;
   risk: RiskEngine;
   ipfs: IpfsStore;
+  principals: PrincipalService;
+  budgets: BudgetService;
+  approvals: ApprovalService;
+  receipts: ReceiptService;
+  reputation: ReputationService;
+  discovery: DiscoveryService;
+  decisions: DecisionService;
+  signer: TokenSigner;
 }
 
 /**
@@ -27,7 +44,8 @@ export interface AppServices {
  */
 export function buildServer(services: AppServices, config: AppConfig): FastifyInstance {
   const app = Fastify({logger: {level: config.LOG_LEVEL}, bodyLimit: 4 * 1024 * 1024});
-  const {vendors, metadata, contractIntel, risk, ipfs} = services;
+  const {vendors, metadata, contractIntel, risk, ipfs, principals, budgets, approvals, receipts, reputation, discovery, decisions, signer} =
+    services;
 
   const requireAdmin = (req: {headers: Record<string, unknown>}) => {
     if (!config.ADMIN_API_KEY) return; // dev mode: open
@@ -168,7 +186,213 @@ export function buildServer(services: AppServices, config: AppConfig): FastifyIn
     return reply.status(204).send();
   });
 
+  // ================================================================ V7/V9 principals
+  app.post("/v1/orgs", async (req, reply) => {
+    requireAdmin(req);
+    const body = req.body as {displayName?: string};
+    if (!body?.displayName) throw new HttpError(422, "displayName required");
+    return reply.status(201).send(await principals.createOrg(body.displayName));
+  });
+
+  app.post("/v1/principals/:id/children", async (req, reply) => {
+    requireAdmin(req);
+    const {id} = req.params as {id: string};
+    const body = req.body as {kind?: "department" | "agent"; displayName?: string};
+    if (body?.kind !== "department" && body?.kind !== "agent") throw new HttpError(422, "kind must be department|agent");
+    if (!body.displayName) throw new HttpError(422, "displayName required");
+    return reply.status(201).send(await principals.createChild(id, body.kind, body.displayName));
+  });
+
+  app.get("/v1/principals/:id", async (req) => {
+    const {id} = req.params as {id: string};
+    const p = await principals.getPrincipal(id);
+    if (!p) throw new HttpError(404, "principal not found");
+    return {principal: p, chain: await principals.chain(id)};
+  });
+
+  app.post("/v1/principals/:id/status", async (req, reply) => {
+    requireAdmin(req);
+    const {id} = req.params as {id: string};
+    const body = req.body as {status?: "active" | "suspended"};
+    if (body?.status !== "active" && body?.status !== "suspended") throw new HttpError(422, "status must be active|suspended");
+    await principals.setStatus(id, body.status);
+    return reply.status(204).send();
+  });
+
+  // V11 policy — accept the readable text form or the JSON document form
+  app.put("/v1/principals/:id/policy", async (req, reply) => {
+    requireAdmin(req);
+    const {id} = req.params as {id: string};
+    const body = req.body as {text?: string; version?: string; normalizedCurrency?: string; document?: unknown};
+    let doc;
+    if (typeof body?.text === "string") {
+      doc = parsePolicyText(body.text, {version: body.version ?? "1.0.0", normalizedCurrency: body.normalizedCurrency ?? "USD"});
+    } else if (body?.document) {
+      doc = validatePolicy(body.document);
+    } else {
+      throw new HttpError(422, "provide either `text` or `document`");
+    }
+    const result = await principals.setPolicy(id, doc);
+    return reply.status(201).send({...result, version: doc.version, statements: doc.statements.length});
+  });
+
+  app.get("/v1/principals/:id/policy", async (req) => {
+    const {id} = req.params as {id: string};
+    const doc = await principals.effectivePolicy(id);
+    if (!doc) throw new HttpError(404, "no policy for this principal chain");
+    return {document: doc, text: renderPolicyText(doc)};
+  });
+
+  app.post("/v1/delegations", async (req, reply) => {
+    requireAdmin(req);
+    const body = req.body as {from?: string; to?: string; constraints?: Record<string, unknown>};
+    if (!body?.from || !body?.to) throw new HttpError(422, "from and to are required");
+    return reply.status(201).send(await principals.createDelegation(body.from, body.to, body.constraints ?? {}));
+  });
+
+  app.delete("/v1/delegations/:id", async (req, reply) => {
+    requireAdmin(req);
+    const {id} = req.params as {id: string};
+    await principals.revokeDelegation(id);
+    return reply.status(204).send();
+  });
+
+  // ================================================================ V6 budgets
+  app.post("/v1/principals/:id/budgets", async (req, reply) => {
+    requireAdmin(req);
+    const {id} = req.params as {id: string};
+    const body = req.body as {period?: BudgetPeriod; currency?: string; limit?: string};
+    if (!["day", "month", "total"].includes(body?.period ?? "")) throw new HttpError(422, "period must be day|month|total");
+    if (!body?.currency || !body?.limit) throw new HttpError(422, "currency and limit are required");
+    return reply.status(201).send(
+      serializeBudget(await budgets.createBudget(id, body.period!, body.currency, body.limit)),
+    );
+  });
+
+  app.get("/v1/principals/:id/budgets", async (req) => {
+    const {id} = req.params as {id: string};
+    return {budgets: (await budgets.listBudgets(id)).map(serializeBudget)};
+  });
+
+  // ================================================================ V12 decisions
+  app.post("/v1/decisions", async (req, reply) => {
+    const decision = await decisions.decide(req.body as PurchaseRequest);
+    return reply.status(decision.outcome === "deny" ? 200 : 201).send(decision);
+  });
+
+  // cross-rail convenience: normalize a rail-native payload, then decide
+  app.post("/v1/decisions/rail/:rail", async (req, reply) => {
+    const {rail} = req.params as {rail: string};
+    const body = req.body as {requestId?: string; principal?: {agentId: string}; payload?: unknown};
+    if (!body?.requestId || !body?.principal?.agentId) throw new HttpError(422, "requestId and principal.agentId required");
+    const meta = {requestId: body.requestId, principal: body.principal};
+    let normalized: PurchaseRequest;
+    switch (rail) {
+      case "x402": normalized = normalizeX402(body.payload as never, meta); break;
+      case "acp": normalized = normalizeAcp(body.payload as never, meta); break;
+      case "card": normalized = normalizeCard(body.payload as never, meta); break;
+      case "ap2": normalized = normalizeAp2(body.payload as never, meta); break;
+      default: throw new HttpError(422, `unsupported rail: ${rail}`);
+    }
+    const decision = await decisions.decide(normalized);
+    return reply.status(decision.outcome === "deny" ? 200 : 201).send({normalized, decision});
+  });
+
+  app.get("/v1/decisions/:id", async (req) => {
+    const {id} = req.params as {id: string};
+    const d = await decisions.getDecision(id);
+    if (!d) throw new HttpError(404, "decision not found");
+    return d;
+  });
+
+  app.get("/v1/orgs/:orgId/decisions", async (req) => {
+    const {orgId} = req.params as {orgId: string};
+    const q = req.query as {limit?: string};
+    return {decisions: await decisions.listDecisions(orgId, Number(q.limit ?? 50))};
+  });
+
+  app.post("/v1/decisions/:id/settle", async (req, reply) => {
+    requireAdmin(req);
+    const {id} = req.params as {id: string};
+    const body = req.body as {outcome?: "fulfilled" | "disputed" | "refunded" | "failed"};
+    if (!["fulfilled", "disputed", "refunded", "failed"].includes(body?.outcome ?? "")) {
+      throw new HttpError(422, "outcome must be fulfilled|disputed|refunded|failed");
+    }
+    await decisions.settle(id, body.outcome!);
+    return reply.status(204).send();
+  });
+
+  // enforcement-point helper: verify a decision token
+  app.post("/v1/decisions/verify-token", async (req) => {
+    const body = req.body as {token?: string};
+    if (!body?.token) throw new HttpError(422, "token required");
+    try {
+      return {valid: true, payload: decisions.verifyToken(body.token)};
+    } catch (e) {
+      return {valid: false, error: (e as Error).message};
+    }
+  });
+
+  app.get("/v1/decisions/signing-key", async () => ({publicKeyPem: signer.publicKeyPem()}));
+
+  // ================================================================ V8 approvals
+  app.get("/v1/orgs/:orgId/approvals", async (req) => {
+    const {orgId} = req.params as {orgId: string};
+    return {approvals: await approvals.listPending(orgId)};
+  });
+
+  app.post("/v1/approvals/:id/approve", async (req, reply) => {
+    requireAdmin(req);
+    const {id} = req.params as {id: string};
+    const body = req.body as {resolver?: string};
+    const decision = await decisions.approve(id, body?.resolver ?? "admin");
+    return reply.status(200).send(decision);
+  });
+
+  app.post("/v1/approvals/:id/deny", async (req, reply) => {
+    requireAdmin(req);
+    const {id} = req.params as {id: string};
+    const body = req.body as {resolver?: string; reason?: string};
+    await decisions.deny(id, body?.resolver ?? "admin", body?.reason ?? "denied");
+    return reply.status(204).send();
+  });
+
+  // ================================================================ V13 receipts
+  app.get("/v1/orgs/:orgId/receipts", async (req) => {
+    const {orgId} = req.params as {orgId: string};
+    const q = req.query as {limit?: string};
+    return {receipts: await receipts.list(orgId, Number(q.limit ?? 50))};
+  });
+
+  app.get("/v1/orgs/:orgId/receipts/verify", async (req) => {
+    const {orgId} = req.params as {orgId: string};
+    return await receipts.verifyChain(orgId);
+  });
+
+  // ================================================================ V10 reputation
+  app.get("/v1/vendors/:vendorId/reputation", async (req) => {
+    const {vendorId} = req.params as {vendorId: string};
+    return await reputation.forVendor(assertVendorId(vendorId));
+  });
+
+  // ================================================================ V14 discovery
+  app.get("/v1/discovery", async (req) => {
+    const q = req.query as {category?: string; minLevel?: string; maxRisk?: string; limit?: string};
+    return {
+      results: await discovery.search({
+        ...(q.category ? {category: q.category} : {}),
+        ...(q.minLevel ? {minVerificationLevel: Number(q.minLevel)} : {}),
+        ...(q.maxRisk ? {maxRiskScore: Number(q.maxRisk)} : {}),
+        ...(q.limit ? {limit: Number(q.limit)} : {}),
+      }),
+    };
+  });
+
   return app;
+}
+
+function serializeBudget(b: {id: string; principalId: string; period: string; currency: string; limitMicros: bigint}) {
+  return {id: b.id, principalId: b.principalId, period: b.period, currency: b.currency, limit: formatAmount(b.limitMicros)};
 }
 
 function assertVendorId(vendorId: string): string {

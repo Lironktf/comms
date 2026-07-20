@@ -29,6 +29,29 @@ const envSchema = z.object({
   /** Model used by the LLM extractor when enabled. */
   EXTRACTOR_MODEL: z.string().default("claude-opus-4-8"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
+
+  // --- V6–V13 decision layer ---
+  /** Ed25519 PKCS8 PEM used to sign decision tokens. Empty => ephemeral key (dev only). */
+  DECISION_SIGNING_KEY: z.string().optional(),
+  /** Currency all budgets and policy amount thresholds normalize to. */
+  NORMALIZED_CURRENCY: z.string().default("USD"),
+  /** JSON map of currency/asset -> decimal rate in NORMALIZED_CURRENCY per 1 unit. */
+  FX_RATES: z
+    .string()
+    .default('{"USD":"1","USDC":"1","EURC":"1.08","EUR":"1.08"}')
+    .transform((s, ctx) => {
+      try {
+        const obj = JSON.parse(s) as Record<string, string>;
+        return new Map(Object.entries(obj).map(([k, v]) => [k.toUpperCase(), v]));
+      } catch {
+        ctx.addIssue({code: "custom", message: "FX_RATES must be a JSON object of currency->rate"});
+        return new Map<string, string>();
+      }
+    }),
+  /** Seconds a budget hold and its decision token remain valid before expiring (fail closed). */
+  DECISION_TOKEN_TTL_SECONDS: z.coerce.number().default(600),
+  /** Seconds a human-approval request stays pending before it expires. */
+  APPROVAL_TTL_SECONDS: z.coerce.number().default(86400),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

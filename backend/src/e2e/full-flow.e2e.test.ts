@@ -13,7 +13,7 @@ import {
 } from "viem";
 import {privateKeyToAccount} from "viem/accounts";
 import {foundry} from "viem/chains";
-import {attestationRegistryAbi, type MerchantMetadata} from "@actp/core";
+import {attestationRegistryAbi, parsePolicyText, type MerchantMetadata} from "@actp/core";
 import {ActpClient} from "@actp/sdk";
 import {buildApp, type App} from "../app.js";
 
@@ -386,5 +386,92 @@ describe("V5 — risk", () => {
     const score = await sdk.getRisk(vendorId);
     expect(score.riskLevel).not.toBe("critical");
     expect(score.reasons.map((r) => r.rule)).not.toContain("registry.status.suspended");
+  });
+});
+
+describe("V6–V14 — cross-rail decision layer over the live registry", () => {
+  let dOrg: string;
+  let dAgent: string;
+  let allowDecisionId: string;
+
+  it("sets up org/agent/policy/budget and ALLOWS a card purchase of the onchain vendor, with an enforcement token", async () => {
+    const org = await app.services.principals.createOrg("Acme Corp");
+    dOrg = org.id;
+    const agent = await app.services.principals.createChild(org.id, "agent", "CI Bot");
+    dAgent = agent.id;
+    await app.services.principals.setPolicy(
+      org.id,
+      parsePolicyText(
+        `deny when vendor.status != "active"\nrequire_approval when amount > 250\nallow when vendor.verificationLevel >= 3 and category in ["software"]`,
+        {version: "1.0.0"},
+      ),
+    );
+    await app.services.budgets.createBudget(org.id, "total", "USD", "1000");
+    await sync();
+
+    const decision = await sdk.decide({
+      requestId: "e2e-card-1",
+      principal: {agentId: agent.id},
+      rail: "card",
+      amount: {value: "40", currency: "USD"},
+      payee: {vendorId},
+      category: "software",
+    });
+    expect(decision.outcome).toBe("allow");
+    expect(decision.token).toBeTruthy();
+    expect(decision.vendorId).toBe(vendorId.toLowerCase());
+    allowDecisionId = decision.decisionId;
+
+    // the enforcement token verifies (offline-verifiable Ed25519 signature)
+    const verified = await sdk.verifyDecisionToken(decision.token!);
+    expect(verified.valid).toBe(true);
+  });
+
+  it("enforces the SAME policy on the x402 rail for the same onchain vendor wallet", async () => {
+    const wallet = (await sdk.getVendor(vendorId)).wallets[0]!;
+    const {normalized, decision} = await sdk.decideForRail("x402", "e2e-x402-1", dAgent, {
+      network: "eip155:8453",
+      payTo: wallet,
+      asset: {symbol: "USDC", decimals: 6},
+      amountAtomic: "2000000", // 2 USDC
+      category: "software",
+    });
+    expect(normalized.rail).toBe("x402");
+    expect(normalized.payee.wallet?.toLowerCase()).toBe(wallet.toLowerCase());
+    expect(decision.outcome).toBe("allow"); // resolved to the same vendor -> same [verified] rule
+    expect(decision.vendorId).toBe(vendorId.toLowerCase());
+  });
+
+  it("cross-rail budget: card + x402 spend draw down ONE normalized cap", async () => {
+    const org = await app.services.principals.createOrg("Budget Co");
+    const agent = await app.services.principals.createChild(org.id, "agent", "Bot");
+    await app.services.principals.setPolicy(org.id, parsePolicyText("allow", {version: "1.0.0"}));
+    await app.services.budgets.createBudget(org.id, "total", "USD", "50");
+    const wallet = (await sdk.getVendor(vendorId)).wallets[0]!;
+
+    const card = await sdk.decide({requestId: "bud-card", principal: {agentId: agent.id}, rail: "card", amount: {value: "30", currency: "USD"}, payee: {vendorId}});
+    expect(card.outcome).toBe("allow");
+    await sdk.settle(card.decisionId, "fulfilled");
+
+    const {decision: x402} = await sdk.decideForRail("x402", "bud-x402", agent.id, {
+      network: "eip155:8453", payTo: wallet, asset: {symbol: "USDC", decimals: 6}, amountAtomic: "25000000",
+    });
+    expect(x402.outcome).toBe("deny"); // 30 + 25 > 50, across two different rails
+    expect(x402.reasons.some((r) => r.rule === "budget.exceeded")).toBe(true);
+  });
+
+  it("settles the allowed decision and appends a verifiable receipt chain", async () => {
+    await sdk.settle(allowDecisionId, "fulfilled");
+    const verify = await sdk.verifyReceipts(dOrg);
+    expect(verify.valid).toBe(true);
+    expect(verify.length).toBeGreaterThan(0);
+    const receipts = await sdk.getReceipts(dOrg);
+    expect(receipts.some((r) => r.event === "settlement")).toBe(true);
+  });
+
+  it("discovery surfaces the verified onchain vendor, ranked", async () => {
+    const results = (await sdk.discover({category: "api-services", minLevel: 3})) as {vendorId: string; rank: number}[];
+    expect(results.length).toBeGreaterThanOrEqual(1);
+    expect(results.some((r) => r.vendorId === vendorId.toLowerCase())).toBe(true);
   });
 });

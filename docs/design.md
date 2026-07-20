@@ -197,17 +197,29 @@ Output — always the full explanation, never a bare number:
 
 Properties: deterministic (same inputs + ruleset ⇒ same score — reproducible for disputes), versioned rulesets (scores are comparable only within a version), hard overrides (sanctions match ⇒ `critical` regardless of arithmetic), and monotone freshness (scores carry evaluation timestamps; consumers set max-age). ML can later *propose* signals, but the decision layer stays explainable — an agent declining a merchant must be able to say exactly why (also our defamation-liability posture: we publish *facts and rule outcomes*, not opinions).
 
-### V6–V14 (design direction; post-MVP)
+### V6–V14 — cross-rail decision layer (implemented)
 
-- **V6 Policy Engine:** Cedar as the policy substrate — decidable, SMT-analyzable (provable "no policy path permits an unapproved >$250 purchase"), µs evaluation, native entity hierarchy. Stateful aggregates (daily budgets) are computed by context providers and injected — the engine stays pure. Budgets use two-phase **hold/settle** semantics so concurrent agents can't double-spend a shared treasury.
-- **V7 Agent Permissions:** policies attach to *principals* (org → dept → agent), not wallets; a wallet is a rail detail.
-- **V8 Human Approval:** `REQUIRE_APPROVAL` as a first-class decision outcome with signed, single-use, expiring approval tokens; Slack/MCP-elicitation as channels; timeouts fail closed.
-- **V9 Delegation:** Biscuit/UCAN-style attenuated chains (each hop can only narrow authority) with central revocation.
-- **V10 Reputation:** computed from receipt corpus (actual transaction outcomes), separated from verified facts; sybil-resistance via verification-weighted feedback (ERC-8004's unweighted reputation is the cautionary tale).
-- **V11 Policy Language:** human-readable surface compiling to Cedar; never invent new semantics.
-- **V12 Decision API:** one `POST /v1/decisions` returning allow/deny/approve + a short-lived signed **decision token** that enforcement points (x402 facilitator middleware, wallet co-signers, card issuers via JIT virtual cards) require — this is what turns policy from advisory into enforced.
-- **V13 Receipts:** hash-chained per-org audit log; periodic Merkle roots anchored onchain.
-- **V14 Discovery:** the registry as the trusted alternative to unvetted Bazaar listings; ranking must stay free of pay-for-placement or neutrality dies.
+This is the defensible core (see `strategy.md`): the neutral, cross-rail control plane that
+decides and enforces whether a purchase is allowed, on any rail. Full reference in
+`policy.md`; the whole layer runs offchain by necessity — it must span card rails that have no
+onchain presence at all, which is exactly why an onchain-only "trust layer" could never be it.
+
+- **V6 Policy Engine:** a purpose-built deterministic evaluator (`backend/src/policy/engine.ts`) with the "Cedar property" — a fixed attribute registry, comparison operators, no loops → total, decidable, fully explainable. Deny-overrides, allow-required, deny-by-default. Stateful aggregates (budgets) are computed by context providers and injected; the engine stays pure. Cedar itself was considered but rejected for the MVP: spending needs injected aggregates Cedar can't express internally anyway, and a purpose-built engine keeps full control of explainability and the money-typed context without a WASM dependency.
+- **V6 Budgets:** two-phase **hold/settle**, cross-rail by construction — a `$10k/month` cap draws down a USD card charge and a USDC x402 payment against one normalized limit (FX-normalized, fixed-point), so agents sharing a treasury can't double-spend.
+- **V7 Agent Permissions:** policies attach to *principals* (org → department → agent), never to wallets; a wallet is a rail detail.
+- **V8 Human Approval:** `REQUIRE_APPROVAL` is a first-class outcome; the enforcement token is minted only on grant; approvals expire (fail closed).
+- **V9 Delegation:** attenuated org → dept → agent chains — each hop can only narrow authority (min amount, intersect rails/categories, union denies), with revocation.
+- **V10 Reputation:** computed from the settlement corpus, **verification-weighted** so sybil feedback barely moves it (ERC-8004's unweighted reputation is the cautionary tale); kept strictly separate from verified facts.
+- **V11 Policy Language:** a readable line form (`deny when risk.level == "critical"`) that compiles to the validated JSON AST — a thin surface, no new semantics.
+- **V12 Decision API:** one rail-agnostic `POST /v1/decisions` (plus `/decisions/rail/:rail` adapters for x402/ACP/card/AP2) returning allow/deny/approve + a short-lived Ed25519 **decision token** that any enforcement point (x402 facilitator, card issuer JIT hook, A2A endpoint) verifies before settling — this is what turns policy from advisory into enforced, identically on every rail.
+- **V13 Receipts:** per-org keccak256 hash chain over every decision/approval/settlement; tamper-evident and verifiable end to end. Periodic Merkle roots anchored onchain is a later stage.
+- **V14 Discovery:** query the registry for verified, low-risk merchants instead of searching the open web; ranking is deterministic (verification → inverse risk → reputation) with **no pay-for-placement input** — the moment ranking is buyable, neutrality (the whole value) is gone.
+
+**Cross-rail is the non-negotiable spine.** Each rail's native request is normalized by an
+adapter into one `PurchaseRequest`; one policy evaluates it; one signed token enforces it.
+Adding a rail is adding an adapter — nothing downstream changes. No single incumbent (Visa,
+Mastercard, Stripe) can offer this because each is scoped to its own network; that neutrality
+is the moat (`strategy.md`).
 
 ---
 

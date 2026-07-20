@@ -83,3 +83,61 @@ POST /v1/vendors/:vendorId/risk-signals   # { signal, value, source } (admin)
 Accepted `signal` names (external observations): `domain_age_days`, `wallet_age_days`,
 `wallet_flagged`, `sanctions_match`, `phishing_reports`, `security_incidents`,
 `refund_complaints`.
+
+## Principals & delegation (V7/V9)
+
+```
+POST   /v1/orgs                          { displayName }                     (admin) -> principal
+POST   /v1/principals/:id/children       { kind: department|agent, displayName } (admin)
+GET    /v1/principals/:id                -> { principal, chain }
+POST   /v1/principals/:id/status         { status: active|suspended }        (admin)
+PUT    /v1/principals/:id/policy         { text | document, version? }       (admin)  # V11
+GET    /v1/principals/:id/policy         -> { document, text }
+POST   /v1/delegations                   { from, to, constraints }           (admin)  # narrow-only
+DELETE /v1/delegations/:id                                                   (admin)
+```
+
+`constraints`: `{ maxAmount?, rails?[], categories?[], allowedVendors?[], deniedVendors?[], expiresAt? }`
+(amounts in the org's normalized currency). Policy `text` uses the language in `policy.md`.
+
+## Budgets (V6, cross-rail)
+
+```
+POST /v1/principals/:id/budgets   { period: day|month|total, currency, limit }  (admin)
+GET  /v1/principals/:id/budgets
+```
+
+## Decisions (V12)
+
+```
+POST /v1/decisions                # body: rail-agnostic PurchaseRequest  -> Decision
+POST /v1/decisions/rail/:rail     # body: { requestId, principal, payload } (rail = x402|acp|card|ap2)
+                                  #   -> { normalized, decision }
+GET  /v1/decisions/:id
+GET  /v1/orgs/:orgId/decisions
+POST /v1/decisions/:id/settle     { outcome: fulfilled|disputed|refunded|failed }  (admin)
+POST /v1/decisions/verify-token   { token }  -> { valid, payload? }
+GET  /v1/decisions/signing-key    -> { publicKeyPem }
+```
+
+`Decision`: `{ decisionId, outcome (allow|deny|require_approval), reasons[], vendorId,
+verificationLevel, riskLevel, riskScore, policyVersion, contextHash, holdIds[], approvalId, token }`.
+The `token` (present only on allow) is a short-lived Ed25519 JWS an enforcement point verifies
+before settling. Same `Decision` shape and token format for every rail.
+
+## Approvals (V8)
+
+```
+GET  /v1/orgs/:orgId/approvals               -> pending approvals
+POST /v1/approvals/:id/approve   { resolver } (admin) -> Decision (now allow, with token)
+POST /v1/approvals/:id/deny      { resolver, reason } (admin)
+```
+
+## Receipts (V13), reputation (V10), discovery (V14)
+
+```
+GET /v1/orgs/:orgId/receipts
+GET /v1/orgs/:orgId/receipts/verify          -> { valid, length, brokenAtSeq }
+GET /v1/vendors/:vendorId/reputation         -> verification-weighted score (null below min sample)
+GET /v1/discovery?category=&minLevel=&maxRisk=&limit=   -> ranked, no pay-for-placement
+```

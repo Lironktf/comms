@@ -21,13 +21,38 @@ import {
   verifyDocumentHash,
   type AttestationRecord,
   type ContractTerms,
+  type Decision,
   type MerchantMetadata,
+  type PurchaseRequest,
+  type Receipt,
   type RiskScore,
   type VendorRecord,
 } from "@actp/core";
 
-export {hashDocument, verifyDocumentHash, validateMerchantMetadata, computeCid, verifyCid} from "@actp/core";
-export type {VendorRecord, MerchantMetadata, ContractTerms, RiskScore} from "@actp/core";
+export {
+  hashDocument,
+  verifyDocumentHash,
+  validateMerchantMetadata,
+  computeCid,
+  verifyCid,
+  parsePolicyText,
+  renderPolicyText,
+} from "@actp/core";
+export type {
+  VendorRecord,
+  MerchantMetadata,
+  ContractTerms,
+  RiskScore,
+  PurchaseRequest,
+  Decision,
+  DecisionOutcome,
+  DecisionTokenPayload,
+  Rail,
+  Money,
+  PolicyDocument,
+  DelegationConstraints,
+  Receipt,
+} from "@actp/core";
 
 export interface ActpClientOptions {
   /** ACTP backend API base URL, e.g. http://localhost:8402 */
@@ -126,6 +151,83 @@ export class ActpClient {
 
   async getContractTerms(vendorId: Hex): Promise<{terms: ContractTerms; merchantAnchored: boolean}> {
     return this.api("GET", `/v1/vendors/${vendorId}/contract-terms`);
+  }
+
+  // ------------------------------------------------------------------ V12 decisions (cross-rail)
+
+  /** Submit a rail-agnostic purchase request for an allow/deny/approval decision. */
+  async decide(request: PurchaseRequest): Promise<Decision> {
+    return this.api("POST", "/v1/decisions", request);
+  }
+
+  /**
+   * Cross-rail convenience: hand a rail-native payload (x402 PaymentRequirements, ACP
+   * delegate-payment, card auth, AP2 mandate) and it is normalized server-side before the
+   * same policy is applied. One policy, every rail.
+   */
+  async decideForRail(
+    rail: "x402" | "acp" | "card" | "ap2",
+    requestId: string,
+    agentId: string,
+    payload: unknown,
+  ): Promise<{normalized: PurchaseRequest; decision: Decision}> {
+    return this.api("POST", `/v1/decisions/rail/${rail}`, {requestId, principal: {agentId}, payload});
+  }
+
+  async getDecision(decisionId: string): Promise<Decision> {
+    return this.api("GET", `/v1/decisions/${decisionId}`);
+  }
+
+  /** Confirm or fail a settlement (settles/releases budget holds, records for reputation). */
+  async settle(decisionId: string, outcome: "fulfilled" | "disputed" | "refunded" | "failed"): Promise<void> {
+    return this.api("POST", `/v1/decisions/${decisionId}/settle`, {outcome});
+  }
+
+  /** Enforcement-point helper: verify a decision token via the backend. */
+  async verifyDecisionToken(token: string): Promise<{valid: boolean; payload?: unknown; error?: string}> {
+    return this.api("POST", "/v1/decisions/verify-token", {token});
+  }
+
+  /** The Ed25519 public key (PEM) enforcement points use to verify tokens offline. */
+  async decisionSigningKey(): Promise<string> {
+    return (await this.api<{publicKeyPem: string}>("GET", "/v1/decisions/signing-key")).publicKeyPem;
+  }
+
+  // ------------------------------------------------------------------ V8 approvals
+  async listApprovals(orgId: string): Promise<unknown[]> {
+    return (await this.api<{approvals: unknown[]}>("GET", `/v1/orgs/${orgId}/approvals`)).approvals;
+  }
+
+  async approve(approvalId: string, resolver?: string): Promise<Decision> {
+    return this.api("POST", `/v1/approvals/${approvalId}/approve`, {resolver});
+  }
+
+  async denyApproval(approvalId: string, resolver: string, reason: string): Promise<void> {
+    return this.api("POST", `/v1/approvals/${approvalId}/deny`, {resolver, reason});
+  }
+
+  // ------------------------------------------------------------------ V13 receipts
+  async getReceipts(orgId: string, limit = 50): Promise<Receipt[]> {
+    return (await this.api<{receipts: Receipt[]}>("GET", `/v1/orgs/${orgId}/receipts?limit=${limit}`)).receipts;
+  }
+
+  async verifyReceipts(orgId: string): Promise<{valid: boolean; length: number; brokenAtSeq: number | null}> {
+    return this.api("GET", `/v1/orgs/${orgId}/receipts/verify`);
+  }
+
+  // ------------------------------------------------------------------ V10/V14 reputation + discovery
+  async getReputation(vendorId: Hex): Promise<{score: number | null; sampleSize: number}> {
+    return this.api("GET", `/v1/vendors/${vendorId}/reputation`);
+  }
+
+  async discover(query: {category?: string; minLevel?: number; maxRisk?: number; limit?: number} = {}): Promise<unknown[]> {
+    const params = new URLSearchParams();
+    if (query.category) params.set("category", query.category);
+    if (query.minLevel !== undefined) params.set("minLevel", String(query.minLevel));
+    if (query.maxRisk !== undefined) params.set("maxRisk", String(query.maxRisk));
+    if (query.limit !== undefined) params.set("limit", String(query.limit));
+    const qs = params.toString();
+    return (await this.api<{results: unknown[]}>("GET", `/v1/discovery${qs ? `?${qs}` : ""}`)).results;
   }
 
   /**

@@ -8,11 +8,15 @@ they?*
 DNS + TLS/CT for merchant identity · OPA/Cedar for policy · IAM for agents. **The payment
 protocol is not the innovation — the decision that happens before the payment is.**
 
-This repository is a production-grade MVP of **V1–V5**: a canonical onchain Vendor Registry
-on Base, graduated verification with signed attestations, versioned hash-anchored merchant
-metadata, contract-terms intelligence with provenance, and an explainable risk engine.
+This repository implements **V1–V14**: a canonical onchain Vendor Registry on Base with
+graduated verification, hash-anchored + IPFS-content-addressed metadata, contract intelligence
+and an explainable risk engine (the trust substrate) — plus the **cross-rail decision layer**
+that is the defensible core: define a spending policy once and enforce it across x402, cards,
+ACP, and AP2 with signed enforcement tokens, cross-rail budgets, org→dept→agent delegation,
+human approval, and a tamper-evident receipt chain.
 
-📄 **Design & research:** [`docs/design.md`](docs/design.md) ·
+📄 **Design & strategy:** [`docs/design.md`](docs/design.md) ·
+[`docs/strategy.md`](docs/strategy.md) · [`docs/policy.md`](docs/policy.md) ·
 [`docs/landscape.md`](docs/landscape.md) ·
 [`docs/trust-assumptions.md`](docs/trust-assumptions.md) · [`docs/api.md`](docs/api.md)
 
@@ -25,6 +29,13 @@ metadata, contract-terms intelligence with provenance, and an explainable risk e
 | **V3** Merchant metadata — versioned, JSON-Schema-validated, canonicalized + keccak256-anchored onchain, **content-addressed on IPFS** (CID = onchain URI) for availability + self-verifying retrieval, integrity verified on every read | `backend/src/services/metadata.ts`, `backend/src/storage/`, `packages/core` |
 | **V4** Contract intelligence — term extraction (deterministic + optional Claude LLM) with confidence, provenance and source quotes; never presents AI output as verified fact | `backend/src/services/contractIntel/` |
 | **V5** Risk engine — deterministic, versioned, explainable rules; score + reasons + evidence + inputs-snapshot hash; hard overrides for sanctions/revocation | `backend/src/services/risk/` |
+| **V6/V11** Policy engine — deterministic, explainable, deny-by-default; readable policy language | `backend/src/policy/`, `packages/core/src/policy*.ts` |
+| **V6** Cross-rail budgets — hold/settle, FX-normalized (one cap across card + stablecoin) | `backend/src/services/budgets.ts` |
+| **V7/V9** Principals (org→dept→agent) + attenuated delegation | `backend/src/services/principals.ts` |
+| **V8** Human approval — fail-closed, token minted on grant | `backend/src/services/approvals.ts` |
+| **V10** Verification-weighted reputation · **V14** neutral discovery | `backend/src/services/reputation.ts`, `discovery.ts` |
+| **V12** Rail-agnostic decision API + adapters (x402/ACP/card/AP2) + Ed25519 enforcement tokens | `backend/src/services/decisions.ts`, `rails/adapters.ts`, `crypto/tokens.ts` |
+| **V13** Tamper-evident per-org receipt chain | `backend/src/services/receipts.ts` |
 | Event indexer (reorg-aware, replayable), REST API, TypeScript SDK, deploy scripts, CI | `backend/`, `sdk/`, `contracts/script/`, `.github/` |
 
 ## Architecture
@@ -97,15 +108,22 @@ const actp = new ActpClient({
   attestationRegistryAddress: "0x…",
 });
 
-// x402 pre-payment check: resolve the payee wallet, then decide.
-const vendor = await actp.resolveWallet(payToAddress);
-if (!vendor) return "DENY: unknown counterparty"; // fail closed
+// One decision call, any rail. Hand it a rail-native payload; get allow/deny/approve
+// + a signed enforcement token. The SAME policy applies whether this is x402 or a card.
+const {decision} = await actp.decideForRail("x402", "req-123", "agent_abc", {
+  network: "eip155:8453",
+  payTo: payToAddress,
+  asset: {symbol: "USDC", decimals: 6},
+  amountAtomic: "3000000", // 3 USDC
+  category: "software",
+});
 
-const risk = await actp.getRisk(vendor.vendorId);
-if (risk.riskLevel === "critical") return `DENY: ${risk.reasons[0]?.rule}`;
+if (decision.outcome === "deny") return `DENY: ${decision.reasons.find((r) => r.effect === "deny")?.rule}`;
+if (decision.outcome === "require_approval") return `HOLD: approval ${decision.approvalId}`;
 
-const meta = await actp.getVerifiedMetadata(vendor.vendorId);
-if (!meta.trusted) return "REQUIRE_APPROVAL: metadata not anchored/verified";
+// ALLOW: hand decision.token to the x402 facilitator; it verifies the signature before settling.
+await settleX402(payToAddress, decision.token);
+await actp.settle(decision.decisionId, "fulfilled"); // settles the budget hold + receipt
 ```
 
 ## Security & testing
@@ -119,11 +137,12 @@ revocation, metadata monotonicity, inactive⇒level-0), **upgrade**, and a full 
 suite. Static analysis via Slither + solhint in CI. Trust assumptions and governance:
 [`docs/trust-assumptions.md`](docs/trust-assumptions.md).
 
-## Roadmap (post-MVP)
+## Roadmap (post-V14)
 
-V6 policy engine (Cedar) · V7 per-agent permissions · V8 human approval · V9 attenuated
-delegation · V10 reputation · V11 policy language · V12 decision API + enforcement tokens ·
-V13 receipts/audit · V14 discovery. See `docs/design.md` §4.
+Merkle-root anchoring of receipts onchain · rail enforcement-point middleware (x402 facilitator
+plugin, card-issuer JIT hook) · KYB-provider verifier integrations · decentralized verifier
+network + transparency logs · pinning-service IPFS backend. See `docs/design.md` §7 and
+`docs/strategy.md`.
 
 ## License
 
