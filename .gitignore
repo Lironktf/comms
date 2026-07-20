@@ -13,6 +13,13 @@ contracts/lib/**/node_modules/
 .env.*
 !.env.example
 
+# Solana / Anchor
+solana/target/
+solana/.anchor/
+solana/test-ledger/
+solana/node_modules/
+**/*.rs.bk
+
 # misc
 .DS_Store
 *.log
