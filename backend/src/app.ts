@@ -16,6 +16,9 @@ import {ApprovalService} from "./services/approvals.js";
 import {ReceiptService} from "./services/receipts.js";
 import {ReputationService} from "./services/reputation.js";
 import {DiscoveryService} from "./services/discovery.js";
+import {BazaarService} from "./services/bazaar.js";
+import {KybService} from "./services/kyb/service.js";
+import {StubKybProvider} from "./services/kyb/provider.js";
 import {DecisionService} from "./services/decisions.js";
 import {TokenSigner} from "./crypto/tokens.js";
 import {buildServer, type AppServices} from "./api/server.js";
@@ -67,6 +70,8 @@ export async function buildApp(
   const receipts = new ReceiptService(db);
   const reputation = new ReputationService(db);
   const discovery = new DiscoveryService(db, vendors, risk, reputation);
+  const bazaar = new BazaarService(db, vendors, risk, reputation);
+  const kyb = new KybService(db, new StubKybProvider());
   const decisions = new DecisionService(
     db,
     principals,
@@ -93,6 +98,8 @@ export async function buildApp(
     receipts,
     reputation,
     discovery,
+    bazaar,
+    kyb,
     decisions,
     signer,
   };

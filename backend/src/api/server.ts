@@ -14,9 +14,14 @@ import type {ApprovalService} from "../services/approvals.js";
 import type {ReceiptService} from "../services/receipts.js";
 import type {ReputationService} from "../services/reputation.js";
 import type {DiscoveryService} from "../services/discovery.js";
+import type {BazaarService, BazaarListingInput} from "../services/bazaar.js";
+import type {KybService} from "../services/kyb/service.js";
 import type {DecisionService} from "../services/decisions.js";
+import {verifyAgentAuth, verifyMandate} from "../crypto/agentAuth.js";
+import type {AgentAuth, SignedMandate} from "@actp/core";
 import type {TokenSigner} from "../crypto/tokens.js";
 import {normalizeX402, normalizeAcp, normalizeCard, normalizeAp2} from "../rails/adapters.js";
+import {authorizeX402Settlement, buildX402Extension, type X402Payment} from "../rails/x402.js";
 
 export interface AppServices {
   db: Db;
@@ -31,6 +36,8 @@ export interface AppServices {
   receipts: ReceiptService;
   reputation: ReputationService;
   discovery: DiscoveryService;
+  bazaar: BazaarService;
+  kyb: KybService;
   decisions: DecisionService;
   signer: TokenSigner;
 }
@@ -44,7 +51,7 @@ export interface AppServices {
  */
 export function buildServer(services: AppServices, config: AppConfig): FastifyInstance {
   const app = Fastify({logger: {level: config.LOG_LEVEL}, bodyLimit: 4 * 1024 * 1024});
-  const {vendors, metadata, contractIntel, risk, ipfs, principals, budgets, approvals, receipts, reputation, discovery, decisions, signer} =
+  const {vendors, metadata, contractIntel, risk, ipfs, principals, budgets, approvals, receipts, reputation, discovery, bazaar, kyb, decisions, signer} =
     services;
 
   const requireAdmin = (req: {headers: Record<string, unknown>}) => {
@@ -335,6 +342,21 @@ export function buildServer(services: AppServices, config: AppConfig): FastifyIn
 
   app.get("/v1/decisions/signing-key", async () => ({publicKeyPem: signer.publicKeyPem()}));
 
+  // ---- x402 enforcement: the settle-time guard a facilitator calls before settling ----
+  app.post("/v1/x402/authorize-settlement", async (req) => {
+    const body = req.body as {token?: string; payment?: X402Payment};
+    if (!body?.token || !body?.payment?.payTo || !body?.payment?.asset) {
+      throw new HttpError(422, "token and payment {payTo, amountAtomic, asset} are required");
+    }
+    return authorizeX402Settlement(body.token, body.payment, signer);
+  });
+
+  // Merchants call this to build the extensions block advertising their ACTP vendor id.
+  app.get("/v1/x402/extension/:vendorId", async (req) => {
+    const {vendorId} = req.params as {vendorId: string};
+    return {extensions: buildX402Extension(assertVendorId(vendorId))};
+  });
+
   // ================================================================ V8 approvals
   app.get("/v1/orgs/:orgId/approvals", async (req) => {
     const {orgId} = req.params as {orgId: string};
@@ -385,6 +407,53 @@ export function buildServer(services: AppServices, config: AppConfig): FastifyIn
         ...(q.maxRisk ? {maxRiskScore: Number(q.maxRisk)} : {}),
         ...(q.limit ? {limit: Number(q.limit)} : {}),
       }),
+    };
+  });
+
+  // ================================================================ vetted Bazaar (V14 / x402 discovery)
+  app.post("/v1/bazaar/ingest", async (req, reply) => {
+    requireAdmin(req);
+    const body = req.body as {listings?: BazaarListingInput[]; source?: string};
+    if (!Array.isArray(body?.listings)) throw new HttpError(422, "listings[] required");
+    const result = await bazaar.ingest(body.listings, body.source ?? "ingest");
+    return reply.status(201).send(result);
+  });
+
+  app.get("/v1/bazaar/vetted", async (req) => {
+    const q = req.query as {minLevel?: string; maxRisk?: string; tag?: string; eligibleOnly?: string; limit?: string};
+    return {
+      listings: await bazaar.vetted({
+        ...(q.minLevel ? {minVerificationLevel: Number(q.minLevel)} : {}),
+        ...(q.maxRisk ? {maxRiskScore: Number(q.maxRisk)} : {}),
+        ...(q.tag ? {tag: q.tag} : {}),
+        ...(q.eligibleOnly === "true" ? {eligibleOnly: true} : {}),
+        ...(q.limit ? {limit: Number(q.limit)} : {}),
+      }),
+    };
+  });
+
+  // ================================================================ V2 KYB (level-3 backing)
+  app.post("/v1/vendors/:vendorId/kyb", async (req, reply) => {
+    requireAdmin(req);
+    const {vendorId} = req.params as {vendorId: string};
+    const body = (req.body ?? {}) as {legalName?: string; registrationId?: string; jurisdiction?: string};
+    const result = await kyb.run(assertVendorId(vendorId), body);
+    return reply.status(201).send(result);
+  });
+
+  app.get("/v1/vendors/:vendorId/kyb", async (req) => {
+    const {vendorId} = req.params as {vendorId: string};
+    const latest = await kyb.latest(assertVendorId(vendorId));
+    if (!latest) throw new HttpError(404, "no KYB check on record");
+    return latest;
+  });
+
+  // ================================================================ agent identity / mandate verification (F4)
+  app.post("/v1/agents/verify", async (req) => {
+    const body = req.body as {agentAuth?: AgentAuth; mandate?: SignedMandate};
+    return {
+      agent: body?.agentAuth ? {verified: verifyAgentAuth(body.agentAuth), agentId: body.agentAuth.agentId} : null,
+      mandate: body?.mandate ? verifyMandate(body.mandate) : null,
     };
   });
 

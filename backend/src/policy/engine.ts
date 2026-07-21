@@ -105,6 +105,10 @@ function readAttr(ctx: PolicyContext, attr: string): unknown {
       return ctx.contract.arbitration;
     case "contract.earlyTerminationFee":
       return ctx.contract.earlyTerminationFee;
+    case "agent.verified":
+      return ctx.agent.verified;
+    case "mandate.present":
+      return ctx.mandate.present;
     case "time.hourUtc":
       return ctx.time.hourUtc;
     default:

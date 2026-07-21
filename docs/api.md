@@ -141,3 +141,42 @@ GET /v1/orgs/:orgId/receipts/verify          -> { valid, length, brokenAtSeq }
 GET /v1/vendors/:vendorId/reputation         -> verification-weighted score (null below min sample)
 GET /v1/discovery?category=&minLevel=&maxRisk=&limit=   -> ranked, no pay-for-placement
 ```
+
+## x402 enforcement (F1)
+
+```
+POST /v1/x402/authorize-settlement   { token, payment:{payTo, amountAtomic, asset} }
+     -> { authorized, reason, payload? }     # the facilitator's settle-time guard
+GET  /v1/x402/extension/:vendorId    -> { extensions }   # advertise vendorId in PaymentRequired
+```
+A facilitator calls `authorize-settlement` before settling; a payment with no valid,
+matching decision token is refused. Verification is by signature against the public key from
+`GET /v1/decisions/signing-key` — no shared secret.
+
+## Vetted Bazaar (F3)
+
+```
+POST /v1/bazaar/ingest    { listings:[{resourceUrl, payTo?, domain?, serviceName?, tags?, price?}], source? } (admin)
+GET  /v1/bazaar/vetted?minLevel=&maxRisk=&tag=&eligibleOnly=true&limit=
+     -> { listings:[ { ..., vendorId, verificationLevel, riskLevel, eligibleForAgentPurchase, reasons, rank } ] }
+```
+Each listing's payout wallet/domain is resolved against the registry and scored;
+`eligibleForAgentPurchase` + `reasons` say whether an agent should transact. No pay-for-placement.
+
+## KYB + agent/mandate verification (F4)
+
+```
+POST /v1/vendors/:vendorId/kyb   { legalName?, registrationId?, jurisdiction? } (admin)
+     -> { passed, provider, evidenceHash, attestationInput }   # attestationInput -> onchain level-3
+GET  /v1/vendors/:vendorId/kyb   -> latest KYB result
+POST /v1/agents/verify           { agentAuth?, mandate? } -> { agent, mandate }  # Ed25519 verification
+```
+A decision request may carry `agentAuth` (Web-Bot-Auth-style agent signature) and `mandate`
+(AP2-style signed user mandate); when valid they set the `agent.verified` / `mandate.present`
+policy attributes, so a policy can require them.
+
+## Agent tools (MCP)
+
+Run the MCP server (`mcp/`, `actp-mcp` bin) pointed at the backend (`ACTP_API_URL`). Exposes
+`actp_resolve_merchant`, `actp_get_risk`, `actp_verified_metadata`, `actp_decide`,
+`actp_discover` to any MCP-speaking agent.

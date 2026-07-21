@@ -25,6 +25,31 @@ export interface Money {
   currency: string;
 }
 
+/**
+ * Web-Bot-Auth-style agent identity assertion: the calling agent proves control of a key by
+ * signing a nonce. (Production resolves `publicKeyPem` from the agent's well-known JWKS and
+ * pins it; inline here for portability. Full RFC 9421 structured-signature support is a
+ * follow-up.)
+ */
+export interface AgentAuth {
+  agentId: string;
+  publicKeyPem: string;
+  nonce: string;
+  /** base64url Ed25519 signature over `${agentId}.${nonce}` */
+  signature: string;
+}
+
+/** AP2-style signed user mandate: cryptographic proof the user authorized this spend envelope. */
+export interface SignedMandate {
+  publicKeyPem: string;
+  maxAmount?: string;
+  currency?: string;
+  merchant?: string;
+  nonce: string;
+  /** base64url Ed25519 signature over the canonicalized mandate fields */
+  signature: string;
+}
+
 /** Rail-agnostic purchase request — the single shape every adapter produces. */
 export interface PurchaseRequest {
   /** Client-supplied idempotency key. */
@@ -45,6 +70,10 @@ export interface PurchaseRequest {
   category?: string;
   /** True if this is a recurring/subscription charge. */
   subscription?: boolean;
+  /** Optional agent-identity proof (sets the `agent.verified` policy attribute when valid). */
+  agentAuth?: AgentAuth;
+  /** Optional signed user mandate (sets the `mandate.present` policy attribute when valid). */
+  mandate?: SignedMandate;
   metadata?: Record<string, unknown>;
   /** Original rail payload, preserved for the audit trail. */
   railData?: unknown;

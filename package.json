@@ -7,7 +7,8 @@
   "workspaces": [
     "packages/core",
     "backend",
-    "sdk"
+    "sdk",
+    "mcp"
   ],
   "scripts": {
     "build": "npm run build -w packages/core -w sdk -w backend",

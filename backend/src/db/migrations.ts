@@ -280,6 +280,44 @@ CREATE TABLE IF NOT EXISTS settlements (
 CREATE INDEX IF NOT EXISTS settlements_vendor_idx ON settlements (vendor_id);
 `,
   },
+  {
+    id: "004_bazaar",
+    sql: `
+-- Ingested x402 Bazaar-style listings (raw). Vetting joins these against the registry at read time.
+CREATE TABLE IF NOT EXISTS bazaar_listings (
+  id TEXT PRIMARY KEY,
+  resource_url TEXT NOT NULL,
+  pay_to TEXT,
+  domain TEXT,
+  service_name TEXT,
+  tags JSONB NOT NULL DEFAULT '[]',
+  price JSONB,
+  source TEXT NOT NULL DEFAULT 'ingest',
+  ingested_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS bazaar_pay_to_idx ON bazaar_listings (pay_to);
+`,
+  },
+  {
+    id: "005_kyb",
+    sql: `
+-- Know-Your-Business check results. A passed check is what a verifier turns into an onchain
+-- level-3 (LegalEntityVerified) attestation; the raw evidence stays offchain.
+CREATE TABLE IF NOT EXISTS kyb_checks (
+  id TEXT PRIMARY KEY,
+  vendor_id TEXT NOT NULL,
+  passed BOOLEAN NOT NULL,
+  provider TEXT NOT NULL,
+  legal_name TEXT,
+  registration_id TEXT,
+  jurisdiction TEXT,
+  evidence_hash TEXT NOT NULL,
+  detail JSONB NOT NULL DEFAULT '{}',
+  checked_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS kyb_checks_vendor_idx ON kyb_checks (vendor_id, checked_at DESC);
+`,
+  },
 ];
 
 export async function migrate(db: Db): Promise<void> {

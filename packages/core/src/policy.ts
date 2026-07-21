@@ -38,6 +38,8 @@ export const POLICY_ATTRIBUTES = {
   "contract.autoRenews": "boolean",
   "contract.arbitration": "boolean",
   "contract.earlyTerminationFee": "boolean",
+  "agent.verified": "boolean", // the calling agent presented a valid identity signature (Web Bot Auth-style)
+  "mandate.present": "boolean", // a valid AP2-style signed user mandate accompanied the request
   "time.hourUtc": "number", // 0–23
 } as const;
 
@@ -133,5 +135,7 @@ export interface PolicyContext {
     arbitration: boolean;
     earlyTerminationFee: boolean;
   };
+  agent: {verified: boolean};
+  mandate: {present: boolean};
   time: {hourUtc: number};
 }

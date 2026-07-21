@@ -14,6 +14,7 @@ import type {Db} from "../db/client.js";
 import type {AppConfig} from "../config.js";
 import {evaluatePolicy} from "../policy/engine.js";
 import {TokenSigner, newNonce} from "../crypto/tokens.js";
+import {verifyAgentAuth, verifyMandate} from "../crypto/agentAuth.js";
 import {HttpError} from "./metadata.js";
 import {PrincipalService} from "./principals.js";
 import {BudgetService, FxUnavailableError} from "./budgets.js";
@@ -110,6 +111,13 @@ export class DecisionService {
       ? Math.floor((now.getTime() - new Date(vendor.registeredAt).getTime()) / 86_400_000)
       : null;
 
+    // agent identity (Web-Bot-Auth-style) + user mandate (AP2-style) — verified server-side
+    const agentVerified = req.agentAuth
+      ? verifyAgentAuth(req.agentAuth) && req.agentAuth.agentId === agentId
+      : false;
+    const mandateCheck = req.mandate ? verifyMandate(req.mandate) : null;
+    const mandatePresent = mandateCheck?.valid ?? false;
+
     const ctx: PolicyContext = {
       amount: normalizedAmount,
       currency: req.amount.currency.toUpperCase(),
@@ -125,6 +133,8 @@ export class DecisionService {
       },
       risk: {level: riskLevel, score: riskScore},
       contract,
+      agent: {verified: agentVerified},
+      mandate: {present: mandatePresent},
       time: {hourUtc: now.getUTCHours()},
     };
     const contextHash = keccak256(toBytes(canonicalize({ctx, vendorId, rail: req.rail, amount: req.amount})));
@@ -174,6 +184,14 @@ export class DecisionService {
       }
     }
     if (gateDenied) outcome = "deny";
+
+    // --- agent-auth / mandate signals ------------------------------------
+    if (req.agentAuth) {
+      reasons.push({source: "principal", rule: agentVerified ? "agent.verified" : "agent.auth_invalid", effect: "signal", evidence: {agentId: req.agentAuth.agentId}});
+    }
+    if (req.mandate) {
+      reasons.push({source: "principal", rule: mandatePresent ? "mandate.verified" : "mandate.invalid", effect: "signal", evidence: mandateCheck?.constraints ?? {}});
+    }
 
     // --- risk/verification signals (informational, always recorded) ------
     if (vendor) {

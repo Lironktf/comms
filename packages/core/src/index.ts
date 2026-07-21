@@ -22,6 +22,8 @@ export {
   type PrincipalRef,
   type Money,
   type DelegationConstraints,
+  type AgentAuth,
+  type SignedMandate,
   type PurchaseRequest,
   type DecisionOutcome,
   type DecisionReason,

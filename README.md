@@ -36,7 +36,13 @@ human approval, and a tamper-evident receipt chain.
 | **V10** Verification-weighted reputation · **V14** neutral discovery | `backend/src/services/reputation.ts`, `discovery.ts` |
 | **V12** Rail-agnostic decision API + adapters (x402/ACP/card/AP2) + Ed25519 enforcement tokens | `backend/src/services/decisions.ts`, `rails/adapters.ts`, `crypto/tokens.ts` |
 | **V13** Tamper-evident per-org receipt chain | `backend/src/services/receipts.ts` |
+| **x402 enforcement** — settle-time guard a facilitator calls; refuses settlement without a valid, matching decision token | `backend/src/rails/x402.ts` |
+| **MCP server** — ACTP as agent tools (resolve/risk/metadata/decide/discover) for any MCP agent | `mcp/` |
+| **Vetted Bazaar** — turns unvetted x402 discovery into a trusted, ranked feed | `backend/src/services/bazaar.ts` |
+| **Agent identity + mandates + KYB** — Web-Bot-Auth-style agent verification, AP2 mandate verification, pluggable KYB → level-3 attestation | `backend/src/crypto/agentAuth.ts`, `backend/src/services/kyb/` |
 | Event indexer (reorg-aware, replayable), REST API, TypeScript SDK, deploy scripts, CI | `backend/`, `sdk/`, `contracts/script/`, `.github/` |
+
+**Live on Base Sepolia (testnet):** VendorRegistry `0xaa77A898e44C23d31eE6B54561F9ec8A375328B6`, AttestationRegistry `0x1a06C6bE8894d6A5771B61ba62c3355e2A261256` — see `contracts/deployments/base-sepolia.json`. A Solana/Anchor port of the registry is in `solana/` (written, unbuilt). Full inventory: [`docs/OVERVIEW.md`](docs/OVERVIEW.md).
 
 ## Architecture
 
