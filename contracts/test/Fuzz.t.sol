@@ -130,6 +130,58 @@ contract FuzzTest is BaseTest {
         assertEq(attestations.verificationLevel(vid), expectedActive ? 1 : 0);
     }
 
+    /// Vendor ids are injective over valid domains: distinct valid domains never collide,
+    /// and the same domain always derives the same id.
+    function testFuzz_vendorId_injective(uint256 seedA, uint256 seedB) public view {
+        string memory da = _genDomain(seedA);
+        string memory db = _genDomain(seedB);
+        bytes32 ia = registry.computeVendorId(da);
+        assertEq(ia, registry.computeVendorId(da)); // deterministic
+        if (keccak256(bytes(da)) != keccak256(bytes(db))) {
+            assertTrue(ia != registry.computeVendorId(db), "distinct domains must not collide");
+        }
+    }
+
+    /// A wallet claimed by one vendor can never be claimed by another, for any generated pair.
+    function testFuzz_walletUniqueness(uint256 walletSeed) public {
+        address w = address(uint160(uint256(keccak256(abi.encode("w", walletSeed))) | 1));
+        string[] memory extra = new string[](0);
+        address[] memory wallets = new address[](1);
+        wallets[0] = w;
+
+        vm.prank(vendorOwner);
+        registry.registerVendor("first.example", extra, wallets, "", bytes32(0), "");
+
+        vm.prank(otherOwner);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IVendorRegistry.WalletAlreadyClaimed.selector, w, registry.computeVendorId("first.example")
+            )
+        );
+        registry.registerVendor("second.example", extra, wallets, "", bytes32(0), "");
+    }
+
+    /// Random non-canonical signatures never authorize an attestation.
+    function testFuzz_randomSignatureRejected(bytes32 r, bytes32 s, uint8 vByte) public {
+        bytes32 vid = _registerVendor(vendorOwner, DOMAIN);
+        AttestationRegistry.AttestationRequest memory req = AttestationRegistry.AttestationRequest({
+            vendorId: vid,
+            attType: 3,
+            evidenceHash: keccak256("e"),
+            expiresAt: uint64(block.timestamp + 30 days),
+            nonce: 0,
+            deadline: block.timestamp + 1 hours
+        });
+        uint8 v = uint8(bound(vByte, 27, 28));
+        bytes memory sig = abi.encodePacked(r, s, v);
+        // any recovered address that isn't the verifier must be rejected (or the sig is invalid)
+        try attestations.attestWithSignature(req, sig) {
+            assertTrue(false, "a random signature must never be accepted");
+        } catch {
+            assertTrue(true);
+        }
+    }
+
     /// Signature relay: only the exact signed payload with the current nonce is accepted.
     function testFuzz_attestWithSignature_nonceMustMatch(uint64 nonce) public {
         vm.assume(nonce != 0);

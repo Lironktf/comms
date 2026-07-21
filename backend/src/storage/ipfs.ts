@@ -1,4 +1,4 @@
-import {computeCid} from "@actp/core";
+import {computeCid, verifyCid} from "@actp/core";
 import type {AppConfig} from "../config.js";
 
 /**
@@ -37,7 +37,10 @@ export class MemoryIpfsStore implements IpfsStore {
   }
 
   async get(cid: string): Promise<Uint8Array | null> {
-    return this.blocks.get(cid) ?? null;
+    const bytes = this.blocks.get(cid);
+    if (!bytes) return null;
+    // defense in depth: never return bytes that don't hash to the requested CID
+    return (await verifyCid(bytes, cid)) ? bytes : null;
   }
 }
 
@@ -72,6 +75,8 @@ export class KuboIpfsStore implements IpfsStore {
       method: "POST",
     });
     if (!res.ok) return null;
-    return new Uint8Array(await res.arrayBuffer());
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    // never trust the node: the CID is a content hash, so verify what it returned
+    return (await verifyCid(bytes, cid)) ? bytes : null;
   }
 }

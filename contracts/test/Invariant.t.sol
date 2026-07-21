@@ -217,4 +217,36 @@ contract InvariantTest is Test {
             }
         }
     }
+
+    /// Verification level is always within the defined 0..5 range, for every vendor.
+    function invariant_verificationLevelInRange() public view {
+        uint256 n = handler.registeredCount();
+        for (uint256 i = 0; i < n; i++) {
+            assertLe(attestations.verificationLevel(handler.registeredAt(i)), 5);
+        }
+    }
+
+    /// Every registered vendor has a non-zero owner and a canonical id matching its domain.
+    function invariant_ownerAndIdWellFormed() public view {
+        uint256 n = handler.registeredCount();
+        for (uint256 i = 0; i < n; i++) {
+            bytes32 id = handler.registeredAt(i);
+            IVendorRegistry.VendorView memory v = registry.getVendor(id);
+            assertTrue(v.owner != address(0));
+            assertEq(v.vendorId, id);
+            assertEq(registry.computeVendorId(v.primaryDomain), id);
+        }
+    }
+
+    /// Every wallet a vendor lists resolves back to that same vendor (claim-map consistency).
+    function invariant_walletClaimsConsistent() public view {
+        uint256 n = handler.registeredCount();
+        for (uint256 i = 0; i < n; i++) {
+            bytes32 id = handler.registeredAt(i);
+            IVendorRegistry.VendorView memory v = registry.getVendor(id);
+            for (uint256 j = 0; j < v.wallets.length; j++) {
+                assertEq(registry.vendorIdForWallet(v.wallets[j]), id);
+            }
+        }
+    }
 }

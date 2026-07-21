@@ -49,6 +49,42 @@ describe("verifyCid", () => {
   });
 });
 
+describe("computeCid — independent known-answer cross-check", () => {
+  // RFC 4648 base32 (lowercase, no padding) — multibase 'b'. Re-implemented here so we validate
+  // computeCid against a hand-built CID, not against multiformats' own encoder.
+  const B32 = "abcdefghijklmnopqrstuvwxyz234567";
+  function base32(bytes: Buffer): string {
+    let bits = 0;
+    let value = 0;
+    let out = "";
+    for (const b of bytes) {
+      value = (value << 8) | b;
+      bits += 8;
+      while (bits >= 5) {
+        out += B32[(value >>> (bits - 5)) & 31];
+        bits -= 5;
+      }
+    }
+    if (bits > 0) out += B32[(value << (5 - bits)) & 31];
+    return out;
+  }
+
+  it("matches a hand-constructed CIDv1(raw, sha2-256)", async () => {
+    const msg = new TextEncoder().encode("acme.example canonical bytes");
+    // CID bytes = <cidv1=0x01><raw codec=0x55><sha2-256=0x12><len=0x20><32-byte digest>
+    const digest = createHash("sha256").update(Buffer.from(msg)).digest();
+    const cidBytes = Buffer.concat([Buffer.from([0x01, 0x55, 0x12, 0x20]), digest]);
+    const expected = "b" + base32(cidBytes);
+    expect(await computeCid(msg)).toBe(expected);
+  });
+
+  it("stays 59 chars for typical content (CIDv1 raw base32)", async () => {
+    const cid = await computeCid(new TextEncoder().encode("hello"));
+    expect(cid.length).toBe(59);
+    expect(cid[0]).toBe("b");
+  });
+});
+
 describe("cid helpers", () => {
   it("validates and round-trips ipfs uris", async () => {
     const cid = await computeCid(new TextEncoder().encode("x"));
