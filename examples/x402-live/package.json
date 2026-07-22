@@ -1,0 +1,24 @@
+{
+  "name": "@actp/example-x402-live",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Live Base Sepolia demo: ACTP pre-payment decision above an x402 payment.",
+  "scripts": {
+    "seller": "tsx seller.ts",
+    "pay": "tsx pay.ts",
+    "balance": "tsx balance.ts"
+  },
+  "dependencies": {
+    "@x402/core": "^2.19.0",
+    "@x402/evm": "^2.19.0",
+    "@x402/express": "^2.19.0",
+    "@x402/fetch": "^2.19.0",
+    "express": "^4.21.2",
+    "viem": "^2.55.4"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "@types/express": "^4.17.21"
+  }
+}

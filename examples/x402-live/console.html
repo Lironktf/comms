@@ -1,0 +1,398 @@
+<style>
+  :root {
+    --ground: #f7f7f9;
+    --surface: #ffffff;
+    --surface-2: #fbfbfd;
+    --ink: #14161c;
+    --muted: #5b6270;
+    --faint: #8b91a0;
+    --hair: #e6e7ec;
+    --hair-strong: #d6d8e0;
+    --accent: #4a53c4;
+    --accent-soft: #eceef9;
+    --allow: #2f9e68;
+    --allow-soft: #e7f4ee;
+    --approval: #b8791f;
+    --approval-soft: #f8efdd;
+    --deny: #cc3f38;
+    --deny-soft: #fbe9e8;
+    --mono: ui-monospace, "SF Mono", "SFMono-Regular", "Menlo", "Consolas", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", "Helvetica Neue", sans-serif;
+    --shadow: 0 1px 2px rgba(20,22,28,.04), 0 8px 24px -12px rgba(20,22,28,.12);
+    --r: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #0d0f14;
+      --surface: #171a21;
+      --surface-2: #1c1f28;
+      --ink: #e9ebf2;
+      --muted: #9aa1b2;
+      --faint: #6b7183;
+      --hair: #262a34;
+      --hair-strong: #333846;
+      --accent: #8b93f0;
+      --accent-soft: #21243a;
+      --allow: #4fc088;
+      --allow-soft: #16281f;
+      --approval: #d9a13f;
+      --approval-soft: #2b2415;
+      --deny: #e8635b;
+      --deny-soft: #2c1917;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px -16px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="light"] {
+    --ground:#f7f7f9;--surface:#fff;--surface-2:#fbfbfd;--ink:#14161c;--muted:#5b6270;--faint:#8b91a0;
+    --hair:#e6e7ec;--hair-strong:#d6d8e0;--accent:#4a53c4;--accent-soft:#eceef9;
+    --allow:#2f9e68;--allow-soft:#e7f4ee;--approval:#b8791f;--approval-soft:#f8efdd;--deny:#cc3f38;--deny-soft:#fbe9e8;
+    --shadow:0 1px 2px rgba(20,22,28,.04),0 8px 24px -12px rgba(20,22,28,.12);
+  }
+  :root[data-theme="dark"] {
+    --ground:#0d0f14;--surface:#171a21;--surface-2:#1c1f28;--ink:#e9ebf2;--muted:#9aa1b2;--faint:#6b7183;
+    --hair:#262a34;--hair-strong:#333846;--accent:#8b93f0;--accent-soft:#21243a;
+    --allow:#4fc088;--allow-soft:#16281f;--approval:#d9a13f;--approval-soft:#2b2415;--deny:#e8635b;--deny-soft:#2c1917;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 12px 32px -16px rgba(0,0,0,.6);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--sans); line-height: 1.5;
+    -webkit-font-smoothing: antialiased; font-feature-settings: "cv02","cv03","cv04";
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 28px 24px 72px; }
+
+  /* ---- top bar ---- */
+  .top { display:flex; align-items:center; gap:14px; margin-bottom:26px; flex-wrap:wrap; }
+  .brand { display:flex; align-items:center; gap:11px; }
+  .brand .mark {
+    width:30px; height:30px; border-radius:8px; background:var(--accent); color:#fff;
+    display:grid; place-items:center; font-weight:700; font-size:15px; box-shadow: var(--shadow);
+  }
+  .brand h1 { font-size:16px; margin:0; letter-spacing:-.01em; font-weight:650; }
+  .brand .sub { font-size:12px; color:var(--faint); margin-top:1px; }
+  .top .spacer { flex:1; }
+  .scope-chip {
+    font-size:12px; color:var(--muted); background:var(--surface); border:1px solid var(--hair);
+    border-radius:999px; padding:5px 11px; display:inline-flex; gap:7px; align-items:center;
+  }
+  .scope-chip b { color:var(--ink); font-weight:600; }
+  .theme-btn {
+    background:var(--surface); border:1px solid var(--hair); color:var(--muted); cursor:pointer;
+    border-radius:9px; width:34px; height:34px; display:grid; place-items:center; font-size:15px;
+  }
+  .theme-btn:hover { border-color:var(--hair-strong); color:var(--ink); }
+
+  /* ---- lifecycle strip ---- */
+  .lifecycle {
+    display:grid; grid-template-columns: 1fr 1fr 1fr; gap:1px; background:var(--hair);
+    border:1px solid var(--hair); border-radius:var(--r); overflow:hidden; margin-bottom:30px;
+  }
+  .phase { background:var(--surface); padding:14px 18px; }
+  .phase .k { font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--faint); font-weight:600; }
+  .phase .k .n { color:var(--accent); }
+  .phase .t { font-size:14px; font-weight:600; margin:5px 0 3px; letter-spacing:-.01em; }
+  .phase .d { font-size:12.5px; color:var(--muted); }
+  .phase .who { display:inline-block; margin-top:8px; font-size:10.5px; font-weight:600; letter-spacing:.04em;
+    text-transform:uppercase; padding:2px 8px; border-radius:999px; }
+  .who.machine { background:var(--accent-soft); color:var(--accent); }
+  .who.human { background:var(--approval-soft); color:var(--approval); }
+
+  .section-label { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--faint);
+    font-weight:650; margin:0 0 12px 2px; }
+
+  /* ---- decision cards ---- */
+  .cards { display:flex; flex-direction:column; gap:16px; }
+  .card {
+    background:var(--surface); border:1px solid var(--hair); border-radius:var(--r);
+    box-shadow: var(--shadow); overflow:hidden; position:relative;
+    display:grid; grid-template-columns: 5px 1fr; opacity:0; transform: translateY(8px);
+    animation: rise .5s cubic-bezier(.2,.7,.2,1) forwards;
+  }
+  .card:nth-child(2){ animation-delay:.08s; } .card:nth-child(3){ animation-delay:.16s; }
+  @keyframes rise { to { opacity:1; transform:none; } }
+  @media (prefers-reduced-motion: reduce) { .card { animation:none; opacity:1; transform:none; } }
+  .stripe { width:5px; }
+  .card.allow .stripe { background:var(--allow); } .card.approval .stripe { background:var(--approval); } .card.deny .stripe { background:var(--deny); }
+  .body { padding:18px 20px 20px; min-width:0; }
+
+  .head { display:flex; align-items:flex-start; gap:14px; flex-wrap:wrap; }
+  .verdict { display:inline-flex; align-items:center; gap:7px; font-weight:700; font-size:12.5px;
+    letter-spacing:.03em; text-transform:uppercase; padding:5px 11px 5px 9px; border-radius:8px; white-space:nowrap; }
+  .allow .verdict { background:var(--allow-soft); color:var(--allow); }
+  .approval .verdict { background:var(--approval-soft); color:var(--approval); }
+  .deny .verdict { background:var(--deny-soft); color:var(--deny); }
+  .verdict .g { font-size:13px; }
+  .headline { flex:1; min-width:200px; }
+  .headline .amt { font-size:19px; font-weight:680; letter-spacing:-.02em; font-variant-numeric: tabular-nums; }
+  .headline .amt .cur { font-size:13px; color:var(--muted); font-weight:600; margin-left:3px; }
+  .headline .to { font-size:13px; color:var(--muted); margin-top:2px; }
+  .headline .to b { color:var(--ink); font-weight:600; }
+  .rail-tag { font-family:var(--mono); font-size:11px; color:var(--faint); background:var(--surface-2);
+    border:1px solid var(--hair); border-radius:6px; padding:3px 7px; align-self:flex-start; }
+
+  /* merchant identity row */
+  .merchant { display:flex; align-items:center; gap:12px; margin:16px 0 4px; padding:12px 14px;
+    background:var(--surface-2); border:1px solid var(--hair); border-radius:10px; flex-wrap:wrap; }
+  .avatar { width:34px; height:34px; border-radius:8px; display:grid; place-items:center; font-weight:700;
+    font-size:14px; color:#fff; flex-shrink:0; }
+  .m-main { flex:1; min-width:140px; }
+  .m-name { font-size:14px; font-weight:640; display:flex; align-items:center; gap:7px; }
+  .m-domain { font-size:12px; color:var(--muted); font-family:var(--mono); }
+  .badge { font-size:10.5px; font-weight:600; letter-spacing:.03em; padding:2px 8px; border-radius:999px;
+    display:inline-flex; align-items:center; gap:4px; }
+  .badge.v { background:var(--allow-soft); color:var(--allow); }
+  .badge.u { background:var(--deny-soft); color:var(--deny); }
+  .meters { display:flex; gap:20px; }
+  .meter { text-align:right; }
+  .meter .ml { font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--faint); font-weight:600; }
+  .meter .mv { font-size:14px; font-weight:660; font-variant-numeric:tabular-nums; }
+  .mv.low { color:var(--allow); } .mv.unknown { color:var(--faint); }
+  .lvl { display:inline-flex; gap:2px; margin-top:3px; }
+  .lvl i { width:14px; height:5px; border-radius:2px; background:var(--hair-strong); display:inline-block; }
+  .lvl i.on { background:var(--allow); }
+
+  /* reasons checklist */
+  .reasons { margin-top:16px; }
+  .reasons .rl { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--faint);
+    font-weight:650; margin-bottom:9px; }
+  .reason { display:flex; gap:11px; padding:8px 0; border-top:1px solid var(--hair); align-items:flex-start; }
+  .reason:first-of-type { border-top:none; }
+  .rg { width:19px; height:19px; border-radius:6px; display:grid; place-items:center; font-size:12px;
+    font-weight:700; flex-shrink:0; margin-top:1px; }
+  .rg.allow { background:var(--allow-soft); color:var(--allow); }
+  .rg.deny { background:var(--deny-soft); color:var(--deny); }
+  .rg.require_approval { background:var(--approval-soft); color:var(--approval); }
+  .rg.signal { background:var(--surface-2); color:var(--faint); border:1px solid var(--hair); }
+  .rtext { flex:1; min-width:0; }
+  .rtext .rt { font-size:13.5px; font-weight:520; }
+  .rtext .re { font-size:12px; color:var(--muted); font-family:var(--mono); margin-top:2px; word-break:break-word; }
+  .rule-id { font-family:var(--mono); font-size:11px; color:var(--faint); }
+
+  /* footer / provenance */
+  .foot { margin-top:16px; padding-top:14px; border-top:1px solid var(--hair);
+    display:flex; gap:18px 26px; flex-wrap:wrap; align-items:center; }
+  .kv { font-size:11.5px; }
+  .kv .kk { color:var(--faint); text-transform:uppercase; letter-spacing:.05em; font-size:10px; font-weight:600; }
+  .kv .vv { font-family:var(--mono); color:var(--muted); font-size:11.5px; }
+  .vv.tok { color:var(--allow); } .vv.notok { color:var(--faint); }
+  .actions { margin-left:auto; display:flex; gap:9px; }
+  .btn { font-family:var(--sans); font-size:13px; font-weight:600; border-radius:9px; padding:8px 15px;
+    cursor:pointer; border:1px solid var(--hair-strong); background:var(--surface); color:var(--ink); }
+  .btn:hover { border-color:var(--muted); }
+  .btn.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .btn.primary:hover { filter:brightness(1.06); }
+  .btn.ghost { color:var(--deny); border-color:transparent; }
+  .btn.ghost:hover { background:var(--deny-soft); }
+  .resolved { margin-left:auto; font-size:12.5px; font-weight:600; display:none; align-items:center; gap:7px; }
+  .resolved.approved { color:var(--allow); } .resolved.denied { color:var(--deny); }
+
+  .footnote { margin-top:30px; font-size:12px; color:var(--faint); text-align:center; line-height:1.6; }
+  .footnote code { font-family:var(--mono); color:var(--muted); }
+  a { color:var(--accent); text-decoration:none; }
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div class="brand">
+      <div class="mark">A</div>
+      <div>
+        <h1>ACTP · Decision Console</h1>
+        <div class="sub">pre-payment trust &amp; policy enforcement — cross-rail</div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <span class="scope-chip">agent <b>research-agent-01</b> · org <b>Acme Robotics</b></span>
+    <button class="theme-btn" id="theme" title="Toggle theme" aria-label="Toggle theme">◐</button>
+  </div>
+
+  <div class="lifecycle">
+    <div class="phase">
+      <div class="k"><span class="n">01</span> &nbsp;Configure</div>
+      <div class="t">Set policy &amp; budgets once</div>
+      <div class="d">Which merchants, how much, which rails. Wire ACTP into the agent's client one time.</div>
+      <span class="who human">Human · rare</span>
+    </div>
+    <div class="phase">
+      <div class="k"><span class="n">02</span> &nbsp;Enforce</div>
+      <div class="t">Every payment, automatically</div>
+      <div class="d">Each x402 / card / ACP payment calls <code style="font-family:var(--mono);font-size:12px">/decide</code> before it settles. Sub-second, no human.</div>
+      <span class="who machine">Machine · constant</span>
+    </div>
+    <div class="phase">
+      <div class="k"><span class="n">03</span> &nbsp;Interrupt</div>
+      <div class="t">Only on exceptions</div>
+      <div class="d">A person is pulled in only when the policy itself says so — a step-up or a blocked payment worth reviewing.</div>
+      <span class="who human">Human · occasional</span>
+    </div>
+  </div>
+
+  <p class="section-label">Live decisions · x402 on Base Sepolia · rendered from real engine output</p>
+  <div class="cards" id="cards"></div>
+
+  <p class="footnote">
+    Every line above maps 1:1 to the engine's typed <code>reasons[]</code> — the console never invents a justification, it renders the decision.<br>
+    Same decision object appears inline in the agent's app, in this approvals inbox, or pushed to Slack / mobile.
+  </p>
+</div>
+
+<script>
+  // ---- real decisions captured from the ACTP engine (x402 / Base Sepolia) ----
+  const DECISIONS = [
+    {
+      outcome: "allow",
+      amount: {value: "0.01", currency: "USDC"},
+      merchant: {name: "Acme Cloud", domain: "acme-cloud.example", known: true, level: 3, wallet: "0x0c65…57d5"},
+      risk: {level: "low", score: 18},
+      budget: {used: "0", limit: "500", currency: "USD", period: "month"},
+      reasons: [
+        {effect:"allow", rule:"allow-verified", text:"Merchant is a verified vendor", evidence:"vendor.verificationLevel (3) ≥ 2"},
+        {effect:"signal", rule:"risk.low", text:"Low counterparty risk", evidence:"risk score 18 / 100"},
+        {effect:"signal", rule:"budget.usage", text:"Within monthly budget", evidence:"0 / 500 USD used this month"},
+      ],
+      decisionId:"dec_777da0b5", token:true, contextHash:"0x8cf75c06…88375", ttl:"expires in 5m",
+    },
+    {
+      outcome: "require_approval",
+      amount: {value: "12.50", currency: "USDC"},
+      merchant: {name: "Acme Cloud", domain: "acme-cloud.example", known: true, level: 3, wallet: "0x0c65…57d5"},
+      risk: {level: "low", score: 18},
+      budget: {used: "0", limit: "500", currency: "USD", period: "month"},
+      reasons: [
+        {effect:"require_approval", rule:"step-up-large", text:"Amount over your auto-approve limit", evidence:"amount 12.50 > 5.00"},
+        {effect:"allow", rule:"allow-verified", text:"Merchant is a verified vendor", evidence:"vendor.verificationLevel (3) ≥ 2"},
+        {effect:"signal", rule:"risk.low", text:"Low counterparty risk", evidence:"risk score 18 / 100"},
+      ],
+      decisionId:"dec_c8521856", token:false, approvalId:"apr_e59d56ec", contextHash:"0x48428718…ab31f1", actionable:true,
+    },
+    {
+      outcome: "deny",
+      amount: {value: "0.01", currency: "USDC"},
+      merchant: {name: null, domain: "api.acme-cloud.example", known: false, level: null, wallet: "0x0000…dEaD"},
+      risk: {level: "unknown", score: null},
+      budget: null,
+      reasons: [
+        {effect:"deny", rule:"deny-unknown", text:"No registered merchant claims this wallet", evidence:"vendor.known == false"},
+        {effect:"deny", rule:"deny-inactive", text:"Merchant is not an active vendor", evidence:"vendor.status ≠ active (unknown)"},
+        {effect:"signal", rule:"vendor.unknown", text:"Payee wallet resolves to nothing on-chain", evidence:"0x0000…dEaD"},
+      ],
+      decisionId:"dec_9e44fdd8", token:false, contextHash:"0xce390d9d…d29686",
+    },
+  ];
+
+  const VERDICT = {
+    allow: {label:"Allow", glyph:"✓"},
+    require_approval: {label:"Needs approval", glyph:"⚑"},
+    deny: {label:"Deny", glyph:"✗"},
+  };
+  const RG = {allow:"✓", deny:"✗", require_approval:"⚑", signal:"•"};
+  const AVATAR_HUES = {allow:"var(--allow)", require_approval:"var(--approval)", deny:"var(--faint)"};
+
+  function esc(s){ return String(s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+
+  function levelDots(level){
+    if(level == null) return "";
+    let s = '<span class="lvl">';
+    for(let i=1;i<=5;i++) s += `<i class="${i<=level?'on':''}"></i>`;
+    return s + "</span>";
+  }
+
+  function merchantRow(d){
+    const m = d.merchant;
+    const initial = m.name ? m.name[0] : "?";
+    const hue = AVATAR_HUES[d.outcome];
+    const badge = m.known
+      ? `<span class="badge v">✓ verified · level ${m.level}</span>`
+      : `<span class="badge u">⚠ unverified</span>`;
+    return `<div class="merchant">
+      <div class="avatar" style="background:${hue}">${esc(initial)}</div>
+      <div class="m-main">
+        <div class="m-name">${esc(m.name || "Unknown merchant")} ${badge}</div>
+        <div class="m-domain">${esc(m.domain)} · payTo ${esc(m.wallet)}</div>
+        ${m.known ? `<div style="margin-top:5px">${levelDots(m.level)}</div>` : ""}
+      </div>
+      <div class="meters">
+        <div class="meter">
+          <div class="ml">Risk</div>
+          <div class="mv ${m.known?'low':'unknown'}">${d.risk.score!=null?d.risk.score:'—'}<span style="font-size:11px;color:var(--faint)">${d.risk.score!=null?'/100':''}</span></div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function reasonsBlock(d){
+    const rows = d.reasons.map(r => `
+      <div class="reason">
+        <div class="rg ${r.effect}">${RG[r.effect]}</div>
+        <div class="rtext">
+          <div class="rt">${esc(r.text)} &nbsp;<span class="rule-id">[${esc(r.rule)}]</span></div>
+          <div class="re">${esc(r.evidence)}</div>
+        </div>
+      </div>`).join("");
+    return `<div class="reasons"><div class="rl">Why — policy v1.0.0</div>${rows}</div>`;
+  }
+
+  function footer(d){
+    const tok = d.token
+      ? `<span class="vv tok">issued · ${esc(d.ttl||'')}</span>`
+      : `<span class="vv notok">${d.outcome==='deny' ? 'none — payment cannot settle' : 'pending approval'}</span>`;
+    let actions = "";
+    if(d.actionable){
+      actions = `<div class="actions" data-id="${d.decisionId}">
+          <button class="btn ghost" onclick="resolve('${d.decisionId}','denied')">Deny</button>
+          <button class="btn primary" onclick="resolve('${d.decisionId}','approved')">Approve &amp; issue token</button>
+        </div>
+        <div class="resolved" id="res-${d.decisionId}"></div>`;
+    }
+    return `<div class="foot">
+      <div class="kv"><div class="kk">Decision</div><div class="vv">${esc(d.decisionId)}</div></div>
+      <div class="kv"><div class="kk">Enforcement token</div>${tok}</div>
+      <div class="kv"><div class="kk">Context hash</div><div class="vv">${esc(d.contextHash)}</div></div>
+      ${actions}
+    </div>`;
+  }
+
+  function render(){
+    document.getElementById("cards").innerHTML = DECISIONS.map(d => {
+      const v = VERDICT[d.outcome];
+      return `<div class="card ${d.outcome==='require_approval'?'approval':d.outcome}">
+        <div class="stripe"></div>
+        <div class="body">
+          <div class="head">
+            <span class="verdict"><span class="g">${v.glyph}</span> ${v.label}</span>
+            <div class="headline">
+              <div class="amt">${esc(d.amount.value)}<span class="cur">${esc(d.amount.currency)}</span></div>
+              <div class="to">to <b>${esc(d.merchant.name || d.merchant.domain)}</b> for an API call</div>
+            </div>
+            <span class="rail-tag">x402 · eip155:84532</span>
+          </div>
+          ${merchantRow(d)}
+          ${reasonsBlock(d)}
+          ${footer(d)}
+        </div>
+      </div>`;
+    }).join("");
+  }
+
+  window.resolve = function(id, verdict){
+    const box = document.getElementById("res-"+id);
+    const actions = document.querySelector(`.actions[data-id="${id}"]`);
+    if(actions) actions.style.display = "none";
+    box.style.display = "inline-flex";
+    box.className = "resolved " + verdict;
+    box.innerHTML = verdict === "approved"
+      ? "✓ Approved — enforcement token issued, agent may pay"
+      : "✗ Denied — payment blocked";
+  };
+
+  // theme toggle (light/dark), overriding the OS default both ways
+  const root = document.documentElement;
+  document.getElementById("theme").addEventListener("click", () => {
+    const cur = root.getAttribute("data-theme")
+      || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    root.setAttribute("data-theme", cur === "dark" ? "light" : "dark");
+  });
+
+  render();
+</script>

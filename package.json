@@ -8,7 +8,8 @@
     "packages/core",
     "backend",
     "sdk",
-    "mcp"
+    "mcp",
+    "examples/x402-live"
   ],
   "scripts": {
     "build": "npm run build -w packages/core -w sdk -w backend",
