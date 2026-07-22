@@ -1,0 +1,4 @@
+.wallet.testnet.env
+.demo-state.json
+node_modules
+.env
