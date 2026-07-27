@@ -101,7 +101,7 @@
 | # | Company | Website | CEO / Founder | What they do | How they need ACTP |
 |--|--|--|--|--|--|
 | 62 | **Rye** 🤝 *(+ amplifier)* | rye.com | Arjun Bhargava (Co-founder & CEO; w/ Justin Kan) | Universal Checkout API — agents buy across merchants | Frames "trust" as execution reliability, not merchant-vetting/budget; ACTP is the policy call its checkout executes — and they publish the landscape map (amplifier) |
-| 63 | **Channel3** 🤝 | trychannel3.com | Alexander Schiff (Co-founder & CEO) | Universal product graph + shopping API for agents | Zero payment trust today = fully additive; fits post-discovery / pre-checkout |
+| 63 | **Channel3** 🚫 *(excluded from outreach)* | trychannel3.com | Alexander Schiff (Co-founder & CEO) | Universal product graph + shopping API for agents (discovery layer; cart/checkout "coming soon") | Upstream discovery, complementary in principle and does none of our trust/policy functions — but excluded from outreach by founder call: positioning feels too close for comfort |
 | 64 | **Firmly.ai** 🤝 | firmly.ai | Kumar Senthil (Co-founder & CEO) | Agentic-commerce checkout unifying ACP/UCP/AP2/MCP | ACTP is the pre-pay decision inside their unified checkout — one call regardless of protocol |
 | 65 | **Perplexity (Buy with Pro)** 🤝 | perplexity.ai | Aravind Srinivas (Co-founder & CEO) | In-answer agentic checkout, PayPal one-click | Optimizes merchant-friendliness, not protecting the user's spend or vetting long-tail merchants; ACTP at cart assembly (harder embed — closed product) |
 | 66 | **PayOS** 🤝 | payos.ai | Johnathan McGowan (Co-founder & CEO) | Agent-card abstraction so existing cards work for agent txns (Visa/MC pilot) | Card abstraction with no neutral cross-rail merchant/policy decision on top |

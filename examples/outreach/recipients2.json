@@ -1,0 +1,112 @@
+[
+  {
+    "company": "Skyvern",
+    "first": "Suchintan",
+    "email": "suchintan@skyvern.com",
+    "fallback": "founders@skyvern.com",
+    "subject": "your agent checks out before anyone checks the merchant",
+    "noun": "platforms",
+    "hook": "Skyvern's purchasing agent already adds items to cart and completes checkout with stored cards and corporate cards across arbitrary merchants, with nothing checking first whether the agent should be paying that specific merchant.",
+    "bay_area": true,
+    "note": "SF; verified purchasing/checkout product"
+  },
+  {
+    "company": "TinyFish",
+    "first": "Sudheesh",
+    "email": "sudheesh@tinyfish.ai",
+    "fallback": "info@tinyfish.ai",
+    "subject": "your \"do not checkout\" guardrail says it all",
+    "noun": "platforms",
+    "hook": "TinyFish agents already sign in and complete bookings and form submissions on live merchant sites, and your own docs tell customers to add \"do not proceed to checkout\" guardrails, which is exactly the gap: nothing independently checks whether the agent should pay a given merchant.",
+    "bay_area": true,
+    "note": "Palo Alto; agents act/book on merchant sites"
+  },
+  {
+    "company": "Browser Use",
+    "first": "Gregor",
+    "email": "gregor@browser-use.com",
+    "fallback": "sales@browser-use.com",
+    "subject": "your agents can enter a card on any site, unchecked",
+    "noun": "frameworks",
+    "hook": "Browser Use drives a real browser and can fill any field on any site, so the moment a user points it at a checkout it can enter card details with nothing verifying whether the agent should be paying that merchant.",
+    "bay_area": true,
+    "note": "SF; capable, does not market payments; gregor is co-founder/CTO"
+  },
+  {
+    "company": "Mindtrip",
+    "first": "Andy",
+    "email": "andy@mindtrip.ai",
+    "fallback": "mika@mindtrip.ai",
+    "subject": "before your agent books and pays on its own",
+    "noun": "platforms",
+    "hook": "Mindtrip already books and takes payment for a whole trip inside the chat, leaning on PayPal and Sabre for the money, so as you let the agent complete that charge on its own, nothing checks whether the merchant should be paid first.",
+    "bay_area": true,
+    "note": "Palo Alto; verified in-chat book+pay; low competitor risk (outsources payment)"
+  },
+  {
+    "company": "NinjaTech",
+    "first": "Babak",
+    "email": "babak@ninjatech.ai",
+    "fallback": "support@ninjatech.ai",
+    "subject": "your agent pays across the web, merchant unchecked",
+    "noun": "platforms",
+    "hook": "SuperNinja already books flights and hotels and places orders across the open web, and nothing checks whether the merchant on the other end should be paid before it commits.",
+    "bay_area": true,
+    "note": "Palo Alto; SuperNinja transacts (medium confidence on payment depth)"
+  },
+  {
+    "company": "Henry Labs",
+    "first": "Philip",
+    "email": "philip@henrylabs.ai",
+    "fallback": "",
+    "subject": "one-click checkout on any merchant, no check on the merchant",
+    "noun": "platforms",
+    "hook": "You let an app fire a one-click checkout on any merchant on the internet and return the confirmation, so the riskiest call, is this merchant legit and should the agent pay it, happens with nothing in between.",
+    "bay_area": true,
+    "note": "SF; universal checkout; runs on third-party wallet rails (low competitor risk)"
+  },
+  {
+    "company": "Gensmo",
+    "first": "Ning",
+    "email": "ning@gensmo.com",
+    "fallback": "support@gensmo.com",
+    "subject": "your one-tap checkout skips the merchant check",
+    "noun": "platforms",
+    "hook": "Gensmo takes a shopper from a look to a one-tap checkout, and nothing independently checks whether the merchant behind that tap is safe to pay.",
+    "bay_area": true,
+    "note": "Bay Area; one-tap checkout via Nekuda rails (low competitor risk)"
+  },
+  {
+    "company": "Mesh",
+    "first": "Bam",
+    "email": "bam.azizi@meshpay.com",
+    "fallback": "",
+    "subject": "your ai wallet settles before anyone checks the merchant",
+    "noun": "platforms",
+    "hook": "Your AI Wallet can move stablecoins to complete a purchase across chains, and AP2 assumes an upstream authorization step, so a neutral merchant check lets it block a bad merchant before settlement instead of only capping the amount.",
+    "bay_area": true,
+    "note": "SF; stablecoin agent wallet, AP2 support"
+  },
+  {
+    "company": "PayOS",
+    "first": "Johnathan",
+    "email": "johnathan@payos.ai",
+    "fallback": "",
+    "subject": "your agent tokens can pay any merchant, unchecked",
+    "noun": "platforms",
+    "hook": "PayOS pushes money over card rails for agents with the Mastercard Agentic Token, but there is no neutral, cross-rail decision on whether an agent should pay a given merchant before that checkout fires.",
+    "bay_area": true,
+    "note": "SF; card-native agent payments; partner (moves money, no neutral trust decision)"
+  },
+  {
+    "company": "Kura",
+    "first": "Ronit",
+    "email": "ronit@trykura.com",
+    "fallback": "",
+    "subject": "your browser agent can pay any site it lands on",
+    "noun": "platforms",
+    "hook": "Kura is a state-of-the-art browser agent that acts on any site, so the moment it reaches a checkout it can pay, with nothing verifying whether it should be paying that merchant first.",
+    "bay_area": true,
+    "note": "SF (YC S24); SOTA browser agent, checkout plausible/undocumented (softer fit)"
+  }
+]

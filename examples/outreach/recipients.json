@@ -1,0 +1,90 @@
+[
+  {
+    "company": "Lindy",
+    "first": "Flo",
+    "email": "flo@lindy.ai",
+    "fallback": "hello@lindy.ai",
+    "subject": "your agents are acting on sites nobody vetted",
+    "noun": "platforms",
+    "hook": "Lindy's Computer Use already lets your agents navigate real sites and fill in forms on their own, with nothing verifying who is on the other side of those actions.",
+    "bay_area": true,
+    "note": "SF confirmed; hook softened per fact-check (checkout not documented, form-filling is)"
+  },
+  {
+    "company": "ElizaOS",
+    "first": "Shaw",
+    "email": "shaw@elizalabs.ai",
+    "fallback": "inquiries@elizalabs.ai",
+    "subject": "researchers already tricked eliza agents into paying attackers",
+    "noun": "frameworks",
+    "hook": "ElizaOS agents move real money on-chain, and Princeton and Sentient researchers have already shown prompt-injection attacks that make those agents send crypto to attacker-controlled addresses.",
+    "bay_area": true,
+    "note": "SF confirmed; hook corrected to the documented research demonstration"
+  },
+  {
+    "company": "Composio",
+    "first": "Soham",
+    "email": "soham@composio.dev",
+    "fallback": "hello@composio.dev",
+    "subject": "your tool router can move money to anyone right now",
+    "noun": "platforms",
+    "hook": "Your Tool Router already lets an agent fire Stripe payments and Brex spend calls through one endpoint, with no check on whether that agent should be moving money to a given recipient.",
+    "bay_area": true,
+    "note": "SF confirmed; Tool Router + Stripe + Brex all verified"
+  },
+  {
+    "company": "Rye",
+    "first": "Arjun",
+    "email": "arjun@rye.com",
+    "fallback": "support@rye.com",
+    "subject": "one bad merchant and rye just ran a scam charge",
+    "noun": "platforms",
+    "hook": "Rye's Universal Checkout lets an agent complete a purchase at basically any merchant from just a product URL, with nothing deciding whether that merchant is safe or the purchase is in policy first.",
+    "bay_area": false,
+    "note": "NYC confirmed; universal checkout verified"
+  },
+  {
+    "company": "Firmly",
+    "first": "Brian",
+    "email": "brian@firmly.ai",
+    "fallback": "senthil@firmly.ai",
+    "subject": "the checkout that pays the wrong person",
+    "noun": "platforms",
+    "hook": "Firmly lets merchants connect to AI shopping agents for checkout across protocols like ACP, AP2, UCP and MCP, but your materials don't describe any spend or merchant-safety check on the agent side before it goes through.",
+    "bay_area": false,
+    "note": "Seattle confirmed; hook softened per fact-check; target Brian Demelo, VP Partnerships"
+  },
+  {
+    "company": "One",
+    "first": "Moe",
+    "email": "moe@withone.ai",
+    "fallback": "hello@withone.ai",
+    "subject": "the gap in your trust layer can ruin a user",
+    "noun": "platforms",
+    "hook": "You call One \"the trust layer for AI agents,\" and the one piece missing is whether the agent should pay the merchant it is about to pay.",
+    "bay_area": true,
+    "note": "SF confirmed; tagline verbatim + Stripe/Shopify present"
+  },
+  {
+    "company": "Dust",
+    "first": "Gabriel",
+    "email": "gabriel@dust.tt",
+    "fallback": "spolu@dust.tt",
+    "subject": "when a dust agent pays the wrong merchant",
+    "noun": "platforms",
+    "hook": "As Dust agents take real actions for 3,000+ orgs, the spend side is the part enterprises will want governed, and it is not something you would want to build in-house.",
+    "bay_area": false,
+    "note": "Paris HQ confirmed; 3,000+ orgs verified"
+  },
+  {
+    "company": "Crossmint",
+    "first": "Rodri",
+    "email": "rodri@crossmint.com",
+    "fallback": "ken@crossmint.com",
+    "subject": "your agent wallets can pay a scammer, nothing neutral stops it",
+    "noun": "platforms",
+    "hook": "Crossmint gives 40,000+ enterprises and developers agent wallets and agentic checkout, but those guardrails are self-configured, with no neutral party vouching that a given merchant is safe to pay.",
+    "bay_area": false,
+    "note": "NY/Miami/Madrid; 40,000+ verified; tightened to distinguish self-configured guardrails from neutral vetting"
+  }
+]

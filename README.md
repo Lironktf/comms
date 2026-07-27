@@ -1,9 +1,9 @@
-# Agentic Commerce Trust Protocol (ACTP)
+# Grayr — Agentic Commerce Trust Protocol (ACTP)
 
-The trust and policy layer that sits **above** agentic payment rails (x402, Stripe/OpenAI ACP,
-Google AP2, card networks). Before an AI agent spends money, ACTP answers: *who is this
-merchant, how verified are they, what are they selling and on what terms, and how risky are
-they?*
+**[Grayr](https://grayr.xyz)** is the trust and policy layer that sits **above** agentic payment
+rails (x402, Stripe/OpenAI ACP, Google AP2, card networks). Before an AI agent spends money,
+Grayr answers: *who is this merchant, how verified are they, what are they selling and on what
+terms, and how risky are they?* — *ACTP is the underlying protocol Grayr implements.*
 
 DNS + TLS/CT for merchant identity · OPA/Cedar for policy · IAM for agents. **The payment
 protocol is not the innovation — the decision that happens before the payment is.**
