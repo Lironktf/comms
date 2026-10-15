@@ -1,0 +1,7 @@
+circuits/target/
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+contracts/node_modules/
+contracts/deployments/anvil.json
+client/dist/
