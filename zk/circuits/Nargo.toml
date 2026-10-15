@@ -1,0 +1,11 @@
+[workspace]
+members = [
+  "lib",
+  "m0_commitment",
+  "m0_merkle",
+  "transact",
+  "policy_pay",
+  "budget_init",
+  "ragequit",
+]
+default-member = "transact"
