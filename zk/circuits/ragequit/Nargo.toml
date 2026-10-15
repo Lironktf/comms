@@ -1,0 +1,7 @@
+[package]
+name = "ragequit"
+type = "bin"
+authors = ["Lironktf"]
+
+[dependencies]
+shielded = { path = "../lib" }
