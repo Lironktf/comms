@@ -1,0 +1,46 @@
+{
+  "_comment": "Printed by `nargo test --package shielded --show-output print_vectors` (zk/circuits/lib/src/lib.nr). Asserted by zk/client/test/hashes.test.ts and zk/contracts/test/Hashes.t.sol.",
+  "inputs": {
+    "sk": "0x1234",
+    "amount": "5000000",
+    "token": "0xa0b86991",
+    "label": "77",
+    "blinding": "999",
+    "policy": "0",
+    "leafIndex": "3"
+  },
+  "h2_1_2": "0x038682aa1cb5ae4e0a3f13da432a95c77c5c111f6f030faf9cad641ce1ed7383",
+  "h3_1_2_3": "0x23864adb160dddf590f1d3303683ebcb914f828e2635f6e85a32f0a1aecd3dd8",
+  "owner": "0x07f77927f22afca0afc63e63b6027355cc2da95ec6bc929cd7958f5304b92dce",
+  "nk": "0x1649c4ac613e008cf3548ed43fe8d5de09dc4f77d817be58ac0060494f12af64",
+  "inner": "0x13850add955c74f7ddf350be9f747f7cc41d27e729395986118a19034213ae44",
+  "commitment": "0x2688d5960a4ab6e9d9977e2b54d76bbe2234ccf512a43ba7d706b90c9ce2ce07",
+  "nullifier": "0x06840a65821911be2a8d04b5d90c4fef78ef8f9537f0bdf5768cdfc3aa41caa9",
+  "empty_root_20": "0x1c8c3ca0b3a3d75850fcd4dc7bf1e3445cd0cfff3ca510630fd90b47e8a24755",
+  "vendor_leaf": {
+    "wallet": "0xbeef",
+    "level": "3",
+    "categories": "5",
+    "expiry": "1800000000",
+    "value": "0x08c9f704ebb2e17dd980caf704ddd15062a013598f7a5ca4bbd29ca4caa76ec3"
+  },
+  "budget_commitment": {
+    "remaining": "1000",
+    "period": "20000",
+    "blinding": "555",
+    "policy": "0x77",
+    "value": "0x0ad405a907ed8de72a4c60fea3795fd013f1b0ce9b86538ea0d4b8981217b311"
+  },
+  "policy": {
+    "adminSk": "0x99",
+    "token": "0xa0b86991",
+    "maxPerPayment": "10000000",
+    "maxFee": "50000",
+    "periodBudget": "500000000",
+    "periodSeconds": "2592000",
+    "minVendorLevel": "2",
+    "categoryMask": "6",
+    "value": "0x2925f25401ad89914906f544bc8695a33eef2ef564656507fad70b5b0e0406c6",
+    "requireVerifiedVendor": true
+  }
+}
