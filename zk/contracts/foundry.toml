@@ -1,0 +1,43 @@
+[profile.default]
+src = "src"
+out = "out"
+test = "test"
+script = "script"
+libs = ["node_modules", "../../contracts/lib"]
+allow_paths = ["../../contracts"]
+solc_version = "0.8.28"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
+bytecode_hash = "none"
+via_ir = true
+# bb-generated UltraHonk verifiers hit stack-too-deep under via-IR; compile them with the
+# legacy pipeline (18 KB each, under the 24 KB EIP-170 limit). The shared Poseidon2 contract
+# uses upstream's settings (legacy, 1e6 runs): via-IR makes it ~2.5x more expensive per hash.
+# Neither is ever imported by other sources; they are deployed by artifact path.
+additional_compiler_profiles = [{name = "verifier", via_ir = false}, {name = "poseidon", via_ir = false, optimizer_runs = 1000000}]
+compilation_restrictions = [{paths = "src/verifiers/**", via_ir = false}, {paths = "src/libraries/Poseidon2Yul.sol", via_ir = false, min_optimizer_runs = 1000000}]
+fs_permissions = [{access = "read", path = "./out"}, {access = "read", path = "../test-vectors"}, {access = "read", path = "./test/fixtures"}, {access = "read-write", path = "./deployments"}]
+remappings = [
+    "@openzeppelin/contracts/=node_modules/@openzeppelin/contracts/",
+    "@openzeppelin/contracts-upgradeable/=node_modules/@openzeppelin/contracts-upgradeable/",
+    "forge-std/=../../contracts/lib/forge-std/src/",
+    "@grayr/=../../contracts/src/",
+]
+
+[fuzz]
+runs = 256
+
+[invariant]
+runs = 32
+depth = 32
+fail_on_revert = false
+
+[profile.ci]
+fuzz = { runs = 1024 }
+invariant = { runs = 128, depth = 64 }
+
+[fmt]
+line_length = 110
+tab_width = 4
+bracket_spacing = false
