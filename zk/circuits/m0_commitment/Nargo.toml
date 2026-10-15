@@ -1,0 +1,7 @@
+[package]
+name = "m0_commitment"
+type = "bin"
+authors = ["Lironktf"]
+
+[dependencies]
+shielded = { path = "../lib" }

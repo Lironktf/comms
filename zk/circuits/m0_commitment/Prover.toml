@@ -1,0 +1,4 @@
+# commitment = H3(amount, secret, 0). Change amount or secret and `nargo execute` must fail.
+commitment = "229829890617662737578753080062265126858540665873436396301175715332599983240"
+amount = "42"
+secret = "7"
