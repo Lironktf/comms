@@ -1,0 +1,7 @@
+[package]
+name = "policy_pay"
+type = "bin"
+authors = ["Lironktf"]
+
+[dependencies]
+shielded = { path = "../lib" }
