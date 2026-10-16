@@ -2,14 +2,15 @@
   "name": "actp",
   "version": "0.1.0",
   "private": true,
-  "description": "Agentic Commerce Trust Protocol — vendor identity, verification, metadata, contract intelligence, and risk infrastructure for autonomous purchasing",
+  "description": "Agentic Commerce Trust Protocol \u2014 vendor identity, verification, metadata, contract intelligence, and risk infrastructure for autonomous purchasing",
   "license": "Apache-2.0",
   "workspaces": [
     "packages/core",
     "backend",
     "sdk",
     "mcp",
-    "examples/x402-live"
+    "examples/x402-live",
+    "zk/client"
   ],
   "scripts": {
     "build": "npm run build -w packages/core -w sdk -w backend",
@@ -17,7 +18,8 @@
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "test:contracts": "cd contracts && forge test",
-    "e2e": "npm run e2e -w backend"
+    "e2e": "npm run e2e -w backend",
+    "test:zk": "npm run test -w zk/client"
   },
   "engines": {
     "node": ">=20"
