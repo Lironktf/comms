@@ -44,6 +44,16 @@ human approval, and a tamper-evident receipt chain.
 
 **Live on Base Sepolia (testnet):** VendorRegistry `0xaa77A898e44C23d31eE6B54561F9ec8A375328B6`, AttestationRegistry `0x1a06C6bE8894d6A5771B61ba62c3355e2A261256` — see `contracts/deployments/base-sepolia.json`. A Solana/Anchor port of the registry is in `solana/` (written, unbuilt). Full inventory: [`docs/OVERVIEW.md`](docs/OVERVIEW.md).
 
+## Private agent payments (ZK layer)
+
+**Verified public merchants, private buyers.** [`zk/`](zk/README.md) adds a shielded pool on Base:
+agents pay x402 APIs with zero-knowledge proofs and the pool pays the merchant directly. The
+public sees "the pool paid M $X", never which agent paid. The proof enforces the agent's spending
+policy (Grayr-verified merchant level, category, caps, a private budget). Compliance is built in
+through association sets and ragequit. Noir + Barretenberg circuits, Foundry contracts, a
+TypeScript client, x402 v2 scheme plugins (Path A), and pool-as-`exact`-payer through EIP-1271
+(Path B, verified against real Base USDC). See [`zk/README.md`](zk/README.md).
+
 ## Architecture
 
 ```

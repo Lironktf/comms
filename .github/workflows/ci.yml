@@ -61,3 +61,35 @@ jobs:
         run: npm run build
       - name: End-to-end (anvil -> deploy -> indexer -> API -> SDK)
         run: npm run e2e -w backend
+
+  zk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: Install Noir + Barretenberg (pinned pair)
+        run: |
+          curl -L https://raw.githubusercontent.com/noir-lang/noirup/refs/heads/main/install | bash
+          ~/.nargo/bin/noirup -v 1.0.0-beta.25
+          curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/refs/heads/next/barretenberg/bbup/install | bash
+          ~/.bb/bbup -v 5.2.1
+      - run: npm install --no-audit --no-fund
+      - name: Install zk contract deps
+        working-directory: zk/contracts
+        run: npm install --no-audit --no-fund --ignore-scripts
+      - name: Rebuild circuits; committed verifiers/artifacts must match
+        run: zk/scripts/build-circuits.sh && git diff --exit-code zk/contracts/src/verifiers zk/client/artifacts
+      - name: Noir tests
+        working-directory: zk/circuits
+        run: ~/.nargo/bin/nargo test --workspace
+      - name: Foundry tests (real-proof verifier tests, pool unit, invariants)
+        working-directory: zk/contracts
+        run: FOUNDRY_PROFILE=ci forge test
+      - name: Client unit tests
+        run: npm run test -w zk/client
+      - name: End-to-end on anvil (real proofs)
+        working-directory: zk/client
+        run: npx vitest run --config vitest.e2e.config.ts
