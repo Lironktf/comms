@@ -1,0 +1,180 @@
+{
+  "machine": {
+    "host": "server",
+    "platform": "linux 7.0.0-14-generic x64",
+    "cpu": "Intel Core Processor (Haswell, no TSX)",
+    "cores": 4,
+    "memGB": 8,
+    "node": "v24.19.0",
+    "nargo": "nargo version = 1.0.0-beta.25",
+    "bb": "5.2.1",
+    "commit": "dca4509",
+    "date": "2026-10-16T20:11:42.008Z"
+  },
+  "runs": 10,
+  "circuits": {
+    "transact": {
+      "acirOpcodes": 435,
+      "gates": 9378
+    },
+    "policy_pay": {
+      "acirOpcodes": 748,
+      "gates": 13079
+    },
+    "budget_init": {
+      "acirOpcodes": 32,
+      "gates": 3443
+    },
+    "ragequit": {
+      "acirOpcodes": 139,
+      "gates": 4856
+    },
+    "m0_commitment": {
+      "acirOpcodes": 5,
+      "gates": 2879
+    },
+    "m0_merkle": {
+      "acirOpcodes": 125,
+      "gates": 1588
+    }
+  },
+  "provingBbJs": {
+    "transact": {
+      "witnessMs": {
+        "n": 10,
+        "min": 21.978304000000207,
+        "median": 25.129030000000057,
+        "p95": 30.92898100000002,
+        "max": 30.92898100000002
+      },
+      "proveMs": {
+        "n": 10,
+        "min": 407.739732,
+        "median": 449.66104799999994,
+        "p95": 510.0000820000005,
+        "max": 510.0000820000005
+      },
+      "proofBytes": 8000
+    },
+    "policy_pay": {
+      "witnessMs": {
+        "n": 10,
+        "min": 28.184667999999874,
+        "median": 32.50340700000015,
+        "p95": 50.64936400000079,
+        "max": 50.64936400000079
+      },
+      "proveMs": {
+        "n": 10,
+        "min": 611.133375999998,
+        "median": 654.1631510000007,
+        "p95": 792.5193689999996,
+        "max": 792.5193689999996
+      },
+      "proofBytes": 8000
+    },
+    "budget_init": {
+      "witnessMs": {
+        "n": 10,
+        "min": 2.2949119999975665,
+        "median": 2.4183279999997467,
+        "p95": 2.5998429999999644,
+        "max": 2.5998429999999644
+      },
+      "proveMs": {
+        "n": 10,
+        "min": 187.9861230000024,
+        "median": 220.56663900000058,
+        "p95": 244.9648410000009,
+        "max": 244.9648410000009
+      },
+      "proofBytes": 7232
+    },
+    "ragequit": {
+      "witnessMs": {
+        "n": 10,
+        "min": 6.503205000000889,
+        "median": 8.587531999997736,
+        "p95": 11.28729999999996,
+        "max": 11.28729999999996
+      },
+      "proveMs": {
+        "n": 10,
+        "min": 281.4430489999977,
+        "median": 367.12910700000066,
+        "p95": 495.5892759999988,
+        "max": 495.5892759999988
+      },
+      "proofBytes": 7616
+    },
+    "m0_commitment": {
+      "witnessMs": {
+        "n": 10,
+        "min": 0.7227339999990363,
+        "median": 1.0160450000003038,
+        "p95": 1.128513000003295,
+        "max": 1.128513000003295
+      },
+      "proveMs": {
+        "n": 10,
+        "min": 180.53962300000057,
+        "median": 213.51584100000036,
+        "p95": 257.27375299999767,
+        "max": 257.27375299999767
+      },
+      "proofBytes": 7232
+    },
+    "m0_merkle": {
+      "witnessMs": {
+        "n": 10,
+        "min": 4.716745999998238,
+        "median": 5.809923000000708,
+        "p95": 8.910417999999481,
+        "max": 8.910417999999481
+      },
+      "proveMs": {
+        "n": 10,
+        "min": 159.44035599999916,
+        "median": 196.3764349999983,
+        "p95": 239.48413399999845,
+        "max": 239.48413399999845
+      },
+      "proofBytes": 6848
+    }
+  },
+  "provingNativeBb": {
+    "transact": {
+      "n": 5,
+      "min": 414.0843819999973,
+      "median": 501.32860000000073,
+      "p95": 588.6632470000004,
+      "max": 588.6632470000004
+    },
+    "policy_pay": {
+      "n": 5,
+      "min": 559.2042309999961,
+      "median": 573.6741599999987,
+      "p95": 644.100437000001,
+      "max": 644.100437000001
+    }
+  },
+  "gas": {
+    "deposit": 678326,
+    "transact_pay": 1525675,
+    "transact_transfer": 1461383,
+    "transact_withdraw": 1500030,
+    "swap": 1567819,
+    "authorize_pathB": 1561642,
+    "ragequit": 850533,
+    "initBudget": 1365971,
+    "payWithPolicy": 1529610,
+    "batch_1_total": 1479025,
+    "batch_1_per_payment": 1479025,
+    "batch_2_total": 2376343,
+    "batch_2_per_payment": 1188172,
+    "batch_4_total": 4194708,
+    "batch_4_per_payment": 1048677,
+    "batch_8_total": 7848112,
+    "batch_8_per_payment": 981014
+  }
+}
