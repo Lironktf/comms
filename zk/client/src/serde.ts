@@ -14,7 +14,7 @@ export function fromWire<T = unknown>(x: unknown): T {
   ) as T;
 }
 
-const KINDS = new Set(["transact", "policyPay", "initBudget", "authorize", "swap"]);
+const KINDS = new Set(["transact", "pay", "policyPay", "initBudget", "authorize", "swap"]);
 
 /** Structural validation of an untrusted bundle (the proof/contract do the real checking). */
 export function parseBundle(x: unknown): Bundle {

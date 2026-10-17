@@ -6,15 +6,15 @@
  * recipient, amount, fee and fee recipient. It learns "someone pays M $X" (public anyway),
  * never who. If it refuses or goes down, use another relayer or submit yourself.
  *
- * Batching: with `batch.maxSize > 1`, bundles are queued and flushed as ONE transaction
- * (pool.transactBatch / payWithPolicyBatch) every `windowMs` or when full: cheaper per
- * payment and it blurs timing (several payments, different merchants, one tx).
+ * Batching: with `batch.maxSize > 1`, payment bundles (transact, pay, policyPay, in any mix)
+ * are queued and flushed as ONE pool.batch transaction every `windowMs` or when full: cheaper
+ * per payment, and it blurs timing (several payers, different merchants, one tx).
  */
 import express, {type Express} from "express";
 import {createHash} from "node:crypto";
 import type {Address, Hex, PublicClient, WalletClient} from "viem";
 import {parseBundle, toWire} from "./serde.js";
-import {simulateBundle, submitBatch, submitBundle} from "./pool.js";
+import {BATCHABLE, simulateBundle, submitBatch, submitBundle} from "./pool.js";
 import type {Bundle} from "./wallet.js";
 
 export interface RelayerConfig {
@@ -36,6 +36,7 @@ export interface RelayResult {
 export function bundleFee(b: Bundle): {token: Address | null; fee: bigint} {
   switch (b.kind) {
     case "transact":
+    case "pay":
     case "authorize":
     case "swap":
       return {token: b.inputs.token, fee: b.inputs.fee};
@@ -112,28 +113,25 @@ export class Relayer {
 
   async relay(b: Bundle): Promise<RelayResult> {
     await this.check(b);
-    const batchable = (b.kind === "transact" || b.kind === "policyPay") && (this.cfg.batch?.maxSize ?? 1) > 1;
+    const batchable = BATCHABLE.has(b.kind) && (this.cfg.batch?.maxSize ?? 1) > 1;
     if (!batchable) {
       const r = await submitBundle(this.cfg.wallet, this.cfg.publicClient, this.cfg.pool, b);
       return {txHash: r.hash, gasUsed: r.gasUsed, batchSize: 1};
     }
     return new Promise((resolve, reject) => {
       this.queue.push({bundle: b, resolve, reject});
-      const sameKind = this.queue.filter((q) => q.bundle.kind === b.kind).length;
-      if (sameKind >= this.cfg.batch!.maxSize) void this.flush();
+      if (this.queue.length >= this.cfg.batch!.maxSize) void this.flush();
       else if (!this.timer) this.timer = setTimeout(() => void this.flush(), this.cfg.batch!.windowMs);
     });
   }
 
-  /** Submit everything queued, one transaction per bundle kind. */
+  /** Submit everything queued as one pool.batch transaction. */
   async flush(): Promise<void> {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
-    const items = this.queue;
+    const group = this.queue;
     this.queue = [];
-    for (const kind of ["transact", "policyPay"] as const) {
-      const group = items.filter((q) => q.bundle.kind === kind);
-      if (!group.length) continue;
+    if (group.length) {
       try {
         const r = await submitBatch(this.cfg.wallet, this.cfg.publicClient, this.cfg.pool, group.map((q) => q.bundle));
         for (const q of group) q.resolve({txHash: r.hash, gasUsed: r.gasUsed, batchSize: group.length});
