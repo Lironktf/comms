@@ -101,6 +101,31 @@ abstract contract PoolFixture is Test {
         pub[11] = bytes32(context);
     }
 
+    function policyPub(ShieldedPool.PolicyInputs memory p, uint256 context) internal pure returns (bytes32[] memory pub) {
+        pub = new bytes32[](16);
+        pub[0] = bytes32(p.root);
+        pub[1] = bytes32(p.aspRoot);
+        pub[2] = bytes32(p.vendorRoot);
+        pub[3] = bytes32(p.vendorChecked ? uint256(1) : 0);
+        pub[4] = bytes32(p.nullifiers[0]);
+        pub[5] = bytes32(p.nullifiers[1]);
+        pub[6] = bytes32(p.budgetNullifier);
+        pub[7] = bytes32(p.changeCommitment);
+        pub[8] = bytes32(p.newBudgetCommitment);
+        pub[9] = bytes32(p.refundCore);
+        pub[10] = bytes32(p.amount);
+        pub[11] = bytes32(p.fee);
+        pub[12] = bytes32(uint256(uint160(p.token)));
+        pub[13] = bytes32(uint256(uint160(p.recipient)));
+        pub[14] = bytes32(uint256(p.timestamp));
+        pub[15] = bytes32(context);
+    }
+
+    /// Mirrors ShieldedPool._payExtra: the payment options bound into `context`.
+    function payExtra(ShieldedPool.PayOptions memory o) internal pure returns (bytes32) {
+        return keccak256(abi.encode(o.mode, o.arbiter, o.claimableAt, o.expiresAt, o.payerAuth, keccak256(o.encryptedRefund)));
+    }
+
     function deposit(address who, uint256 amount, uint256 inner) internal returns (uint256 label, uint256 cm, uint256 leaf) {
         usdc.mint(who, amount);
         vm.startPrank(who);

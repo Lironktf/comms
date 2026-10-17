@@ -215,14 +215,14 @@ contract ShieldedPoolTest is PoolFixture {
         calls[1].ext = ext(address(0), bytes32(uint256(2)));
         _declare(calls[0].inputs, calls[0].ext, 1, 0, false);
         _declare(calls[1].inputs, calls[1].ext, 1, 0, false);
-        pool.transactBatch(calls);
+        pool.batch(calls, new ShieldedPool.PayCall[](0), new ShieldedPool.PolicyCall[](0));
         assertEq(usdc.balanceOf(merchant), 1e6);
         assertEq(usdc.balanceOf(makeAddr("merchant2")), 2e6);
         assertEq(pool.nextIndex(), 6);
         // a batch containing one spent nullifier reverts entirely
         calls[0].inputs.root = pool.root();
         vm.expectRevert();
-        pool.transactBatch(calls);
+        pool.batch(calls, new ShieldedPool.PayCall[](0), new ShieldedPool.PolicyCall[](0));
     }
 
     // -----------------------------------------------------------------
@@ -383,14 +383,15 @@ contract ShieldedPoolTest is PoolFixture {
         p.recipient = merchant;
         p.timestamp = uint64(block.timestamp);
         ShieldedPool.ExtData memory e = ext(address(0), 0);
+        ShieldedPool.PayOptions memory o;
         vm.expectRevert(abi.encodeWithSelector(ShieldedPool.UnknownVendorRoot.selector, 4242));
-        pool.payWithPolicy("", p, e);
+        pool.payWithPolicy("", p, e, o);
         p.vendorRoot = vendorTree.root();
         vm.expectRevert(abi.encodeWithSelector(ShieldedPool.VendorNotActive.selector, merchant));
-        pool.payWithPolicy("", p, e);
+        pool.payWithPolicy("", p, e, o);
         p.timestamp = uint64(block.timestamp + 1);
         vm.expectRevert(abi.encodeWithSelector(ShieldedPool.StaleTimestamp.selector, p.timestamp));
-        pool.payWithPolicy("", p, e);
+        pool.payWithPolicy("", p, e, o);
         p.timestamp = uint64(block.timestamp);
         string[] memory none = new string[](0);
         address[] memory w = new address[](1);
@@ -399,7 +400,7 @@ contract ShieldedPoolTest is PoolFixture {
         vendors.registerVendor("merchant.example", none, w, "", bytes32(0), "");
         p.budgetNullifier = 2;
         vm.expectRevert(ShieldedPool.DuplicateNullifier.selector);
-        pool.payWithPolicy("", p, e);
+        pool.payWithPolicy("", p, e, o);
     }
 
     function test_rootHistoryIsBounded() public {
