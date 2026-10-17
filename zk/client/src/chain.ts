@@ -1,6 +1,9 @@
 import {parseAbiItem, type Address, type Hex, type PublicClient} from "viem";
 import {MerkleTree} from "./merkle.js";
 
+/** ASSUMPTION: 2,000 blocks per eth_getLogs fits common public-RPC limits; raise if your RPC allows. */
+const LOG_CHUNK = 2_000n;
+
 /** One leaf of the note tree as seen onchain. */
 export interface LeafRecord {
   commitment: bigint;
@@ -93,10 +96,19 @@ export class PoolSync {
   }
 
   async sync(): Promise<void> {
+    // public RPCs cap eth_getLogs ranges: catch up in bounded chunks
+    for (;;) {
+      const latest = await this.client.getBlockNumber({cacheTime: 0});
+      if (latest <= this.lastBlock) return;
+      const to = latest - this.lastBlock > LOG_CHUNK ? this.lastBlock + LOG_CHUNK : latest;
+      await this.syncTo(to, to === latest);
+      if (to === latest) return;
+    }
+  }
+
+  private async syncTo(latest: bigint, verifyRoot: boolean): Promise<void> {
     // cacheTime 0: viem otherwise caches the block number for its polling interval, and a
     // sync right after a tx would silently miss that block.
-    const latest = await this.client.getBlockNumber({cacheTime: 0});
-    if (latest <= this.lastBlock) return;
     const range = {address: this.pool, fromBlock: this.lastBlock + 1n, toBlock: latest} as const;
     if (!this.book) {
       this.book = (await this.client.readContract({
@@ -200,6 +212,8 @@ export class PoolSync {
     for (const l of nfs) this.nullifiers.add(l.args.nullifier!);
     this.lastBlock = latest;
 
+    // Root check only at the head: reading old state needs an archive node.
+    if (!verifyRoot) return;
     const onchainRoot = (await this.client.readContract({
       address: this.pool,
       abi: [parseAbiItem("function root() view returns (uint256)")],

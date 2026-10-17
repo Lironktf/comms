@@ -22,6 +22,9 @@ const PUBLISHED = parseAbiItem(
 );
 
 /** Mirrors Grayr's VendorTree (verified merchants) from its events. Public data. */
+/** ASSUMPTION: 2,000 blocks per eth_getLogs fits common public-RPC limits; raise if your RPC allows. */
+const LOG_CHUNK = 2_000n;
+
 export class VendorTreeSync {
   readonly tree = new MerkleTree(20);
   readonly leaves: VendorLeafRecord[] = [];
@@ -30,14 +33,23 @@ export class VendorTreeSync {
   constructor(
     readonly client: PublicClient,
     readonly address: Address,
-  ) {}
+    /** first block to scan (the VendorTree's deploy block on a live network) */
+    readonly fromBlock = 0n,
+  ) {
+    this.lastBlock = fromBlock - 1n;
+  }
 
   async sync(): Promise<void> {
     // cacheTime 0: viem otherwise caches the block number for its polling interval, and a
     // sync right after a tx would silently miss that block.
     const latest = await this.client.getBlockNumber({cacheTime: 0});
     if (latest <= this.lastBlock) return;
-    const logs = await this.client.getLogs({address: this.address, event: PUBLISHED, fromBlock: this.lastBlock + 1n, toBlock: latest});
+    const logs = [];
+    // public RPCs cap eth_getLogs ranges; scan in bounded chunks
+    for (let from = this.lastBlock + 1n; from <= latest; from += LOG_CHUNK) {
+      const to = from + LOG_CHUNK - 1n < latest ? from + LOG_CHUNK - 1n : latest;
+      logs.push(...(await this.client.getLogs({address: this.address, event: PUBLISHED, fromBlock: from, toBlock: to})));
+    }
     for (const l of logs) {
       const a = l.args;
       const rec: VendorLeafRecord = {
