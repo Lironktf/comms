@@ -1,8 +1,9 @@
 import {parseAbiItem, type Address, type Hex, type PublicClient} from "viem";
 import {MerkleTree} from "./merkle.js";
+import {scanLogs} from "./logs.js";
 
-/** ASSUMPTION: 2,000 blocks per eth_getLogs fits common public-RPC limits; raise if your RPC allows. */
-const LOG_CHUNK = 2_000n;
+/** Blocks processed per sync step; each getLogs inside is further split to the RPC's cap (logs.ts). ASSUMPTION: bounds memory per step; any size works. */
+const SYNC_WINDOW = 2_000n;
 
 /** One leaf of the note tree as seen onchain. */
 export interface LeafRecord {
@@ -100,7 +101,7 @@ export class PoolSync {
     for (;;) {
       const latest = await this.client.getBlockNumber({cacheTime: 0});
       if (latest <= this.lastBlock) return;
-      const to = latest - this.lastBlock > LOG_CHUNK ? this.lastBlock + LOG_CHUNK : latest;
+      const to = latest - this.lastBlock > SYNC_WINDOW ? this.lastBlock + SYNC_WINDOW : latest;
       await this.syncTo(to, to === latest);
       if (to === latest) return;
     }
@@ -117,10 +118,10 @@ export class PoolSync {
     }
     const bookRange = {...range, address: this.book};
     const [recs, disps, closes, refs] = await Promise.all([
-      this.client.getLogs({...bookRange, event: EV.recorded}),
-      this.client.getLogs({...bookRange, event: EV.disputed}),
-      this.client.getLogs({...bookRange, event: EV.closed}),
-      this.client.getLogs({...range, event: EV.refunded}),
+      scanLogs(this.client, range.fromBlock, range.toBlock, (fromBlock, toBlock) => this.client.getLogs({...bookRange, fromBlock, toBlock, event: EV.recorded})),
+      scanLogs(this.client, range.fromBlock, range.toBlock, (fromBlock, toBlock) => this.client.getLogs({...bookRange, fromBlock, toBlock, event: EV.disputed})),
+      scanLogs(this.client, range.fromBlock, range.toBlock, (fromBlock, toBlock) => this.client.getLogs({...bookRange, fromBlock, toBlock, event: EV.closed})),
+      scanLogs(this.client, range.fromBlock, range.toBlock, (fromBlock, toBlock) => this.client.getLogs({...range, fromBlock, toBlock, event: EV.refunded})),
     ]);
     for (const l of recs) {
       const a = l.args;
@@ -148,12 +149,12 @@ export class PoolSync {
     }
 
     const [cms, nfs, deps, auths, recl, swaps] = await Promise.all([
-      this.client.getLogs({...range, event: EV.commitment}),
-      this.client.getLogs({...range, event: EV.nullifier}),
-      this.client.getLogs({...range, event: EV.deposited}),
-      this.client.getLogs({...range, event: EV.authorized}),
-      this.client.getLogs({...range, event: EV.reclaimed}),
-      this.client.getLogs({...range, event: EV.swapped}),
+      scanLogs(this.client, range.fromBlock, range.toBlock, (fromBlock, toBlock) => this.client.getLogs({...range, fromBlock, toBlock, event: EV.commitment})),
+      scanLogs(this.client, range.fromBlock, range.toBlock, (fromBlock, toBlock) => this.client.getLogs({...range, fromBlock, toBlock, event: EV.nullifier})),
+      scanLogs(this.client, range.fromBlock, range.toBlock, (fromBlock, toBlock) => this.client.getLogs({...range, fromBlock, toBlock, event: EV.deposited})),
+      scanLogs(this.client, range.fromBlock, range.toBlock, (fromBlock, toBlock) => this.client.getLogs({...range, fromBlock, toBlock, event: EV.authorized})),
+      scanLogs(this.client, range.fromBlock, range.toBlock, (fromBlock, toBlock) => this.client.getLogs({...range, fromBlock, toBlock, event: EV.reclaimed})),
+      scanLogs(this.client, range.fromBlock, range.toBlock, (fromBlock, toBlock) => this.client.getLogs({...range, fromBlock, toBlock, event: EV.swapped})),
     ]);
 
     for (const l of deps) {
