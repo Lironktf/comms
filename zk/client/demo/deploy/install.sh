@@ -13,7 +13,8 @@ install -d /etc/caddy
 install -m 644 "$here/Caddyfile" /etc/caddy/Caddyfile
 install -m 644 "$here/caddy.service" /etc/systemd/system/caddy.service
 install -m 644 "$here/grayr-demo.service" /etc/systemd/system/grayr-demo.service
-/usr/local/bin/caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile >/dev/null
+sudo -u caddy XDG_DATA_HOME=/var/lib/caddy /usr/local/bin/caddy validate --adapter caddyfile --config /etc/caddy/Caddyfile >/dev/null 2>&1 || { echo "Caddyfile invalid"; exit 1; }
+chown -R caddy:caddy /var/lib/caddy /var/log/caddy
 
 # the demo moves from tmux to systemd (same port, 8787)
 sudo -u ubuntu tmux kill-session -t grayr-demo 2>/dev/null || true
