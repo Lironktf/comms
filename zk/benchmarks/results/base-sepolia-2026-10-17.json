@@ -1,0 +1,219 @@
+{
+  "network": "base-sepolia",
+  "chainId": 84532,
+  "pool": "0x7342eC59ee29fEAA116FF05817b16b839De88145",
+  "date": "2026-10-17",
+  "note": "live receipts; L1 fees on Sepolia are not representative of mainnet, l1GasUsed is",
+  "rows": [
+    {
+      "name": "smoke: you deposit 2 USDC",
+      "tx": "0x5657662a10fbe608ca844d8091a3c798f132e9366c805b6c1ab8414785f00fac",
+      "block": 48242350,
+      "l2GasUsed": 1092228,
+      "l2GasPriceWei": 6000000,
+      "l1GasUsed": 4618,
+      "l1FeeWei": 12482916,
+      "totalFeeWei": 6553380482916
+    },
+    {
+      "name": "smoke: agent funded 1 USDC",
+      "tx": "0x86402ddf04c4d27c7c11596eb0fa2d4d8593e86bdf7310bc85a22c13b4eecb88",
+      "block": 48242354,
+      "l2GasUsed": 695891,
+      "l2GasPriceWei": 6000000,
+      "l1GasUsed": 4591,
+      "l1FeeWei": 12410570,
+      "totalFeeWei": 4175358410570
+    },
+    {
+      "name": "smoke: root published",
+      "tx": "0xf57f055984b17a5685b062a8c3eab4c896e8dd1c93c78d901963214054550014",
+      "block": 48242359,
+      "l2GasUsed": 95936,
+      "l2GasPriceWei": 6000000,
+      "l1GasUsed": 1714,
+      "l1FeeWei": 4769355,
+      "totalFeeWei": 575620769355
+    },
+    {
+      "name": "smoke: budget minted",
+      "tx": "0x01dd169ebc35f4e1bbb9051a4a060b36b2955e8cb2680757f87b355470663d26",
+      "block": 48242361,
+      "l2GasUsed": 1365947,
+      "l2GasPriceWei": 6000000,
+      "l1GasUsed": 97021,
+      "l1FeeWei": 269914086,
+      "totalFeeWei": 8195951914086
+    },
+    {
+      "name": "smoke: paid 1.00 USDC (refundable)",
+      "tx": "0x9fe3a93e85cd3f9c5f1043cbdbcf5aec683690c9a692c453f9779e87901da2c6",
+      "block": 48242364,
+      "l2GasUsed": 1525456,
+      "l2GasPriceWei": 6000000,
+      "l1GasUsed": 113912,
+      "l1FeeWei": 316903645,
+      "totalFeeWei": 9153052903645
+    },
+    {
+      "name": "smoke: merchant refunds 0.40",
+      "tx": "0x3ab3a36e75953635534c1392bf455c7b1129e78544ba7616d7ea18b341008cf9",
+      "block": 48242368,
+      "l2GasUsed": 681926,
+      "l2GasPriceWei": 6000000,
+      "l1GasUsed": 2838,
+      "l1FeeWei": 8193397,
+      "totalFeeWei": 4091564193397
+    },
+    {
+      "name": "smoke: agent paid 0.50 USDC",
+      "tx": "0x530a7ed2430fc744d80dc3737ac3a8aea30b575bff867d1bd1d2d60896b3f04d",
+      "block": 48242371,
+      "l2GasUsed": 1545430,
+      "l2GasPriceWei": 6000000,
+      "l1GasUsed": 117124,
+      "l1FeeWei": 338068365,
+      "totalFeeWei": 9272918068365
+    },
+    {
+      "name": "deposit 2 USDC",
+      "tx": "0x3b6e7a0e6c3e5d52acabe1bcbcf9e253a5b270e3cab13555c71a05507340f091",
+      "block": 48242541,
+      "l2GasUsed": 692890,
+      "l2GasPriceWei": 6000000,
+      "l1GasUsed": 4618,
+      "l1FeeWei": 26759714,
+      "totalFeeWei": 4157366759714
+    },
+    {
+      "name": "association-set root",
+      "tx": "0xb3bd51a1206fdecda057488b3d8b254ef91d4a97c44cbdaa7b8b9e82adfbf111",
+      "block": 48242549,
+      "l2GasUsed": 64536,
+      "l2GasPriceWei": 6000000,
+      "l1GasUsed": 1700,
+      "l1FeeWei": 10114138,
+      "totalFeeWei": 387226114138
+    },
+    {
+      "name": "pay escrow 0.30 USDC",
+      "tx": "0x821f6d7ec3983485d09f0ac953cd2bc3f7a2c7ce47f201bc8e61eadeee83b988",
+      "block": 48242552,
+      "l2GasUsed": 1537180,
+      "l2GasPriceWei": 6000000,
+      "l1GasUsed": 114648,
+      "l1FeeWei": 681706907,
+      "totalFeeWei": 9223761706907
+    },
+    {
+      "name": "release escrow",
+      "tx": "0xb28cd64450213ddd320965d694ebf0aac2c42f1376aa021081174b616512c9e1",
+      "block": 48242554,
+      "l2GasUsed": 80827,
+      "l2GasPriceWei": 6000000,
+      "l1GasUsed": 4310,
+      "l1FeeWei": 25632635,
+      "totalFeeWei": 484987632635
+    },
+    {
+      "name": "pay escrow 0.20 USDC",
+      "tx": "0x0dd883b074f60f139bbde8c224c983e0ca8531d1d171bd170d4fc57f6f1a5594",
+      "block": 48242557,
+      "l2GasUsed": 1543158,
+      "l2GasPriceWei": 6000000,
+      "l1GasUsed": 114648,
+      "l1FeeWei": 703216580,
+      "totalFeeWei": 9259651216580
+    },
+    {
+      "name": "claim escrow, refund 0.05",
+      "tx": "0x9f60519c7577d5719b2b136bd1ed9d04b6d128852402c2f221a5980b13a1ff6e",
+      "block": 48242572,
+      "l2GasUsed": 678098,
+      "l2GasPriceWei": 6000000,
+      "l1GasUsed": 3534,
+      "l1FeeWei": 24994199,
+      "totalFeeWei": 4068612994199
+    },
+    {
+      "name": "pay escrow 0.20 USDC",
+      "tx": "0x5a01285a7d49f856814d610a8ddc00cbbfa694bc5ecf97bbd1b863ae43742b36",
+      "block": 48242575,
+      "l2GasUsed": 1540289,
+      "l2GasPriceWei": 6000000,
+      "l1GasUsed": 114608,
+      "l1FeeWei": 810432074,
+      "totalFeeWei": 9242544432074
+    },
+    {
+      "name": "expire escrow",
+      "tx": "0x7d1a87ce7a2dcc3b98d1e31cfc5e76cecbb0ecd6fc615c92463705dc9dcfe13e",
+      "block": 48242598,
+      "l2GasUsed": 660330,
+      "l2GasPriceWei": 6000000,
+      "l1GasUsed": 3414,
+      "l1FeeWei": 26708195,
+      "totalFeeWei": 3962006708195
+    },
+    {
+      "name": "batch of 2 (refundable + policy)",
+      "tx": "0xd6eb5763fee8b70d03fb9daaa7ca3e591a12e09e5e46c9344ef445697eef8584",
+      "block": 48242601,
+      "l2GasUsed": 2486771,
+      "l2GasPriceWei": 6000000,
+      "l1GasUsed": 230500,
+      "l1FeeWei": 1803166130,
+      "totalFeeWei": 14922429166130
+    },
+    {
+      "name": "x402 shielded payment",
+      "tx": "0xd3782896e2cd644f689e442b2c18ab6c12f6c57de79ca0c95ff4a0351dcb085f",
+      "block": 48242604,
+      "l2GasUsed": 1528844,
+      "l2GasPriceWei": 6000000,
+      "l1GasUsed": 114621,
+      "l1FeeWei": 896666879,
+      "totalFeeWei": 9173960666879
+    },
+    {
+      "name": "x402 shielded payment",
+      "tx": "0x83213fa18368cef97743dccb3ce2e65dae472182d9d126dc4e48a60ebd116812",
+      "block": 48242687,
+      "l2GasUsed": 1525831,
+      "l2GasPriceWei": 6000000,
+      "l1GasUsed": 114688,
+      "l1FeeWei": 1143544233,
+      "totalFeeWei": 9156129544233
+    },
+    {
+      "name": "x402 refund by request id",
+      "tx": "0x76ef8324db7bc51add9d743db1a7c1ada257106a77c4985486c85713dc3edd90",
+      "block": 48242703,
+      "l2GasUsed": 682161,
+      "l2GasPriceWei": 6000000,
+      "l1GasUsed": 2852,
+      "l1FeeWei": 30115685,
+      "totalFeeWei": 4092996115685
+    },
+    {
+      "name": "pool.authorizeTransfer (proof)",
+      "tx": "0xf1168df38826ab5302b5ee9cf36fef0f3555951479fb635ccbd9a480aff60b57",
+      "block": 48242706,
+      "l2GasUsed": 1590017,
+      "l2GasPriceWei": 6000000,
+      "l1GasUsed": 114742,
+      "l1FeeWei": 1281408508,
+      "totalFeeWei": 9541383408508
+    },
+    {
+      "name": "USDC transferWithAuthorization (stock facilitator)",
+      "tx": "0xfccb11e7b10db89ebc0cfc199e9ef24df99b9db1870c34fd27b94bd2e2ec7339",
+      "block": 48242708,
+      "l2GasUsed": 85823,
+      "l2GasPriceWei": 6000000,
+      "l1GasUsed": 2945,
+      "l1FeeWei": 32896670,
+      "totalFeeWei": 514970896670
+    }
+  ]
+}
