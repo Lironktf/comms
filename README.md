@@ -55,7 +55,7 @@ TypeScript client, x402 v2 scheme plugins (Path A), and pool-as-`exact`-payer th
 (Path B, verified against real Base USDC).
 
 **Live on Base Sepolia** (2026-10-17): ShieldedPool `0x7342eC59ee29fEAA116FF05817b16b839De88145`.
-**Try it: [live demo](https://mainly-belongs-poem-karl.trycloudflare.com)**: an AI agent privately pays an x402 API while you watch.
+**Try it: [live demo](https://demo.grayr.xyz)**: an AI agent privately pays an x402 API while you watch.
 Every flow has run on-chain: private and agent payments, refunds, escrow, batching, and x402
 over HTTP on both paths, including Path B settling real Circle test USDC. Not audited, not on
 mainnet. See [`zk/README.md`](zk/README.md).

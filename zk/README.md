@@ -19,7 +19,7 @@ Base:
 
 Research code. **Live on Base Sepolia (testnet). Not on mainnet, no real funds. Not audited.**
 
-**Live demo: [mainly-belongs-poem-karl.trycloudflare.com](https://mainly-belongs-poem-karl.trycloudflare.com)**. Press the button and an AI agent privately
+**Live demo: [demo.grayr.xyz](https://demo.grayr.xyz)**. Press the button and an AI agent privately
 pays a real x402 API on Base Sepolia, step by step, with Basescan links.
 
 ## Status
@@ -68,7 +68,7 @@ TESTNET_PRIVATE_KEY=... npx tsx scripts/testnet-flows.ts  # escrow x3, batching,
 
 ### Public demo
 
-Running at **https://mainly-belongs-poem-karl.trycloudflare.com**.
+Running at **https://demo.grayr.xyz**.
 
 `client/scripts/demo-server.ts` serves a one-page demo (`client/demo/index.html`): a visitor
 presses a button, and an AI agent privately pays a real x402 API on Base Sepolia. Every step
@@ -76,9 +76,12 @@ streams to the page with Basescan links, along with what the chain shows and wha
 
 ```bash
 cd zk/client
-TESTNET_PRIVATE_KEY=$(cat ~/.config/grayr-zk/operator-testnet.key) DEMO_PUBLIC_URL=https://<public host> npx tsx scripts/demo-server.ts
-cloudflared tunnel --no-autoupdate --url http://127.0.0.1:8787     # prints the https://….trycloudflare.com URL
+TESTNET_PRIVATE_KEY=$(cat ~/.config/grayr-zk/operator-testnet.key) npx tsx scripts/demo-server.ts   # http://127.0.0.1:8787
 ```
+
+In production it runs as two systemd services: `grayr-demo` (the server) and `caddy` (HTTPS
+with automatic Let's Encrypt certificates, proxying only the demo). Set it up with a DNS A record
+for the host, then `sudo bash demo/deploy/install.sh`; the files are in `client/demo/deploy/`.
 
 - **Where it listens.** The server binds to 127.0.0.1 only. Public routes are the page,
   `/demo/*`, the paid `/api/weather` and bundle upload; the relayer's `/v1/relay` is never
