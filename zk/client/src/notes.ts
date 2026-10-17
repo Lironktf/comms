@@ -2,7 +2,7 @@ import {chacha20poly1305} from "@noble/ciphers/chacha.js";
 import {x25519} from "@noble/curves/ed25519.js";
 import {hkdf} from "@noble/hashes/hkdf.js";
 import {sha256} from "@noble/hashes/sha2.js";
-import {budgetCommitment, noteCommitment} from "./hashes.js";
+import {budgetCommitment, noteCommitment, noteCore, noteInner} from "./hashes.js";
 import {bigintToBytes, bytesToBigint, randomField} from "./field.js";
 import type {ShieldedAddress, SpendingKeys} from "./keys.js";
 
@@ -114,6 +114,21 @@ export function tryDecryptNote(ct: Uint8Array, keys: SpendingKeys, commitment: b
     }
     if (commitmentOf(note) !== commitment) return null;
     return note;
+  } catch {
+    return null;
+  }
+}
+
+/** Decrypt a refund-slot ciphertext and check it opens the given note CORE (its amount and
+ *  token are only fixed if and when a refund happens). Used to recognise our own payments. */
+export function tryDecryptCore(ct: Uint8Array, keys: SpendingKeys, core: bigint): Note | null {
+  if (ct.length < 32 + 16) return null;
+  try {
+    const ephPub = ct.subarray(0, 32);
+    const key = hkdf(sha256, x25519.getSharedSecret(keys.viewingPriv, ephPub), ephPub, INFO, 32);
+    const note = deserialize(chacha20poly1305(key, NONCE).decrypt(ct.subarray(32)), keys.owner);
+    if (!note || note.kind !== "note") return null;
+    return noteCore(note.label, noteInner(note.owner, note.blinding, note.policy)) === core ? note : null;
   } catch {
     return null;
   }
