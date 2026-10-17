@@ -14,13 +14,14 @@
  * Every payment is REFUNDABLE and the merchant refunds it right after, so the demo wallets keep
  * their balance and a run costs only gas (~0.000013 ETH).
  *
- * Public routes: the page, /demo/*, /api/weather (a real 402 for anyone to curl) and the bundle
+ * Public routes: the page, /demo/* (POST /demo/run starts a run; GET /demo/events polls its steps), /api/weather (a real 402 for anyone to curl) and the bundle
  * upload. The relayer's own /v1/relay is NOT exposed: with fee 0 it would let anyone spend the
  * operator's gas. Limits: one run at a time, DEMO_MAX_PER_DAY runs, one per IP every 20 s, and
  * runs stop below DEMO_MIN_ETH.
  */
 import express from "express";
 import {join} from "node:path";
+import {randomUUID} from "node:crypto";
 import {decodeEventLog, parseAbiItem, type Address, type Hex} from "viem";
 import {x402Client} from "@x402/core/client";
 import {x402ResourceServer} from "@x402/core/server";
@@ -114,6 +115,7 @@ async function ensureMerchantLeaf() {
 async function runDemo(as: "agent" | "wallet", out: Emit) {
   const t0 = Date.now();
   emit = out;
+  out({step: "preparing"});
   try {
     const leafTx = await ensureMerchantLeaf();
     if (leafTx) out({step: "info", detail: "refreshed the merchant's verified-vendor leaf (they expire after 7 days)", tx: leafTx});
@@ -201,35 +203,48 @@ async function runDemo(as: "agent" | "wallet", out: Emit) {
   }
 }
 
-app.get("/demo/run", async (req, res) => {
-  // no-transform stops proxies (Cloudflare) from compressing, and so buffering, the stream; the
-  // 2 KB comment pushes past any first-chunk buffer so steps arrive as they happen
-  res.set({"content-type": "text/event-stream", "cache-control": "no-cache, no-transform", connection: "keep-alive", "x-accel-buffering": "no"});
-  res.flushHeaders();
-  res.write(`: ${" ".repeat(2048)}\n\n`);
-  const send = (e: Record<string, unknown>) => res.write(`data: ${JSON.stringify(e)}\n\n`);
-  const end = () => res.end();
+// A run is started with POST /demo/run and its steps are polled from GET /demo/events. Polling,
+// not a stream: Cloudflare's quick tunnel held a text/event-stream response until it ended
+// (seen 2026-10-17), and plain short requests pass through any proxy unbuffered.
+type Run = {events: Record<string, unknown>[]; done: boolean; at: number};
+const runs = new Map<string, Run>();
+setInterval(() => {
+  for (const [id, r] of runs) if (Date.now() - r.at > 10 * 60_000) runs.delete(id);
+}, 60_000).unref();
+
+app.post("/demo/run", async (req, res) => {
   const ip = req.ip ?? "?";
   const day = new Date().toISOString().slice(0, 10);
-  if (Date.now() - (lastByIp.get(ip) ?? 0) < 20_000) return send({step: "error", detail: "one run per visitor every 20 seconds"}), end();
-  if ((runsByDay.get(day) ?? 0) >= MAX_PER_DAY) return send({step: "error", detail: "the demo's daily limit is reached; try tomorrow"}), end();
-  if ((await publicClient.getBalance({address: me})) < MIN_ETH) return send({step: "error", detail: "the demo relayer is out of testnet gas; try later"}), end();
-  if (waiting >= 5) return send({step: "error", detail: "busy: several runs are queued, try again in a minute"}), end();
+  const refuse = (detail: string) => res.status(429).json({error: detail});
+  if (Date.now() - (lastByIp.get(ip) ?? 0) < 20_000) return refuse("one run per visitor every 20 seconds");
+  if ((runsByDay.get(day) ?? 0) >= MAX_PER_DAY) return refuse("the demo's daily limit is reached; try tomorrow");
+  if ((await publicClient.getBalance({address: me})) < MIN_ETH) return refuse("the demo relayer is out of testnet gas; try later");
+  if (waiting >= 5) return refuse("busy: several runs are queued, try again in a minute");
   lastByIp.set(ip, Date.now());
+  const id = randomUUID();
+  const run: Run = {events: [], done: false, at: Date.now()};
+  runs.set(id, run);
+  res.json({id});
+  const push = (e: Record<string, unknown>) => void run.events.push(e);
   waiting++;
-  if (busy) send({step: "queued", ahead: waiting - 1});
+  if (busy) push({step: "queued", ahead: waiting - 1});
   while (busy) await new Promise((ok) => setTimeout(ok, 500));
   busy = true;
   waiting--;
   runsByDay.set(day, (runsByDay.get(day) ?? 0) + 1);
-  const keepalive = setInterval(() => res.write(": ping\n\n"), 10_000);
   try {
-    await runDemo(req.query.as === "wallet" ? "wallet" : "agent", send);
+    await runDemo(req.query.as === "wallet" ? "wallet" : "agent", push);
   } finally {
-    clearInterval(keepalive);
     busy = false;
-    end();
+    run.done = true;
   }
+});
+
+app.get("/demo/events", (req, res) => {
+  const run = runs.get(String(req.query.id ?? ""));
+  if (!run) return res.status(404).json({error: "unknown run"});
+  const since = Math.max(0, Number(req.query.since ?? 0) | 0);
+  res.set("cache-control", "no-store").json({events: run.events.slice(since), next: run.events.length, done: run.done});
 });
 
 // public pool stats, cached

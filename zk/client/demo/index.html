@@ -262,16 +262,37 @@ $("#run").onclick = () => {
   log.innerHTML = ""; $("#after").innerHTML = "";
   for (const k in lines) delete lines[k];
   t0 = performance.now();
-  const es = new EventSource(`/demo/run?as=${mode}`);
-  const finish = () => { es.close(); $("#run").disabled = false; $("#run").textContent = "Run again"; loadStats(); };
-  let n = 0;
-  es.onmessage = (m) => {
-    const e = JSON.parse(m.data);
+  let stopped = false, n = 0;
+  const finish = () => { stopped = true; $("#run").disabled = false; $("#run").textContent = "Run again"; loadStats(); };
+  (async () => {
+    // start the run, then poll its steps (a stream would be buffered by some proxies)
+    let id, next = 0, misses = 0;
+    try {
+      const r = await fetch(`/demo/run?as=${mode}`, {method: "POST"});
+      const j = await r.json();
+      if (!r.ok) return handle({step: "error", detail: j.error});
+      id = j.id;
+    } catch { return handle({step: "error", detail: "couldn't reach the demo server"}); }
+    while (!stopped) {
+      await new Promise((ok) => setTimeout(ok, 400));
+      try {
+        const j = await (await fetch(`/demo/events?id=${id}&since=${next}`, {cache: "no-store"})).json();
+        misses = 0;
+        for (const e of j.events || []) handle(e);
+        next = j.next ?? next;
+        if (j.done && !stopped) handle({step: "error", detail: "the run ended unexpectedly"});
+      } catch { if (++misses > 10) handle({step: "error", detail: "connection lost, try again"}); }
+    }
+  })();
+  function handle(e) {
+    if (stopped) return;
     switch (e.step) {
+      case "preparing": line("prep", "pending", "", "syncing with the pool"); break;
       case "queued": line("q", "pending", "", `waiting in line, ${e.ahead} ahead`); break;
       case "info": line("i" + n++, "", "!", esc(e.detail), e.tx ? txl(e.tx) : ""); break;
       case "start":
         if (lines.q) lines.q.remove();
+        if (lines.prep) line("prep", "ok", "✓", "synced with the pool");
         line("start", "ok", "→", "GET /api/weather", e.payer === "agent" ? "as agent" : "as wallet");
         break;
       case "402": {
@@ -306,8 +327,7 @@ $("#run").onclick = () => {
       case "done": line("done", "ok", "■", "done", dur(e.ms)); finish(); break;
       case "error": line("error", "err", "×", esc(e.detail || "stopped")); finish(); break;
     }
-  };
-  es.onerror = () => { if (!lines.done && !lines.error) line("error", "err", "×", "connection lost, try again"); finish(); };
+  }
 };
 
 async function loadStats() {
