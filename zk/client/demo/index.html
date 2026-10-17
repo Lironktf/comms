@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Private Agent Payments</title>
 <meta name="description" content="Live demo on Base Sepolia: an AI agent pays an x402 API from a shielded pool. The merchant is paid; nobody can see which agent paid.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
     --bg: #f7f7f5; --card: #ffffff; --ink: #16181d; --muted: #5d6470; --line: #e3e4e8;
@@ -24,7 +27,7 @@
     --code: #1d222b; --hidden: #1f1a36; --hidden-ink: #b9adff;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   main { max-width: 860px; margin: 0 auto; padding: 40px 16px 64px; }
   h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.15; margin: 12px 0 12px; letter-spacing: -0.02em; }
   h2 { font-size: 20px; margin: 40px 0 12px; }
@@ -52,7 +55,7 @@
   .detail { color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
   .ms { color: var(--muted); font-weight: 400; font-size: 14px; }
   a { color: var(--accent); }
-  code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+  code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
   pre { background: var(--code); padding: 12px; border-radius: 10px; overflow-x: auto; margin: 8px 0 0; }
   code { background: var(--code); padding: 1px 5px; border-radius: 5px; }
   .empty { color: var(--muted); font-size: 14px; }
@@ -74,6 +77,30 @@
   .stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
   .stat b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
   .stat span { font-size: 13px; color: var(--muted); }
+  .flow { display: grid; grid-template-columns: 1fr 1.2fr 1fr 1.2fr 1fr; align-items: center; margin: 28px 0 8px; }
+  .node { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 10px; text-align: center; transition: border-color .3s, box-shadow .3s; }
+  .node b { display: block; font-size: 15px; }
+  .node span { font-size: 12px; color: var(--muted); }
+  .node.lit { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+  .link { position: relative; height: 2px; margin: 0 6px; }
+  .link::before { content: ""; position: absolute; inset: 0; border-top: 2px dashed var(--line); }
+  .link.paid::before { border-top: 2px solid var(--line); transition: border-color .3s; }
+  .link.lit.paid::before { border-color: var(--ok); }
+  .link label { position: absolute; left: 0; right: 0; top: -22px; text-align: center; font-size: 12px; color: var(--muted); }
+  .link.hidden label { color: var(--hidden-ink); }
+  .link.hidden::after { content: "no on-chain link"; position: absolute; left: 0; right: 0; top: 8px; text-align: center; font-size: 11px; color: var(--hidden-ink); }
+  @media (max-width: 640px) {
+    .flow { grid-template-columns: 1fr; gap: 18px; margin: 20px 0 4px; }
+    .node { padding: 10px; }
+    .link { height: 26px; width: 2px; margin: 0 auto; }
+    .link::before { border-top: 0; border-left: 2px dashed var(--line); }
+    .link.paid::before { border-top: 0; border-left: 2px solid var(--line); }
+    .link.lit.paid::before { border-left-color: var(--ok); }
+    .link label { top: 4px; left: 14px; right: auto; width: 160px; text-align: left; }
+    .link.hidden::after { top: 4px; left: auto; right: 14px; width: 120px; text-align: right; }
+  }
+  .icon.todo { border-style: dashed; }
+  li.todo .title { color: var(--muted); font-weight: 500; }
   footer { margin-top: 48px; font-size: 14px; color: var(--muted); }
 </style>
 </head>
@@ -83,6 +110,14 @@
   <h1>An AI agent pays an API. Nobody can tell which agent.</h1>
   <p class="lede">The agent pays a real <a href="https://x402.org">x402</a> API from a shielded pool, using a zero-knowledge proof. The merchant gets USDC. Base's public ledger shows the pool paying the merchant, but not who paid, their balance or their history. The proof also enforces the agent's spending policy.</p>
 
+  <div class="flow" aria-hidden="true">
+    <div class="node" id="n-agent"><b>AI agent</b><span>builds the proof</span></div>
+    <div class="link hidden" id="l-proof"><label>proof only</label></div>
+    <div class="node" id="n-pool"><b>Shielded pool</b><span>verifies, pays</span></div>
+    <div class="link paid" id="l-pay"><label>USDC</label></div>
+    <div class="node" id="n-merchant"><b>x402 merchant</b><span>Grayr-verified</span></div>
+  </div>
+
   <div class="controls">
     <button class="primary" id="run-agent">Run as an AI agent with a spending policy</button>
     <button id="run-wallet">Run as a plain private wallet</button>
@@ -90,7 +125,7 @@
   <p class="muted" style="font-size:14px">Each run makes about 2 real testnet transactions and takes 20 to 30 seconds. The merchant refunds every payment, so the demo stays free.</p>
 
   <div class="card">
-    <ul class="steps" id="steps"><li><span></span><span class="empty">Press a button to start a payment. Each step shows up here as it happens.</span></li></ul>
+    <ul class="steps" id="steps"></ul>
   </div>
 
   <h2>What the chain shows, and what it doesn't</h2>
@@ -120,7 +155,7 @@
   </ol>
   <p class="muted" style="font-size:14px">Try the API yourself: <code id="curl">curl -i /api/weather</code> returns a real 402 with the payment terms.</p>
 
-  <h2>Contracts</h2>
+  <h2>The pool right now</h2>
   <div class="stats" id="stats"></div>
   <div class="card">
     <table id="contracts"><tr><td>loading…</td><td></td></tr></table>
@@ -142,9 +177,27 @@ $("#curl").textContent = `curl -i ${location.origin}/api/weather`;
 
 const steps = $("#steps");
 const rows = {};
+const PLAN = [
+  ["start", "The agent calls the API"],
+  ["402", "The merchant answers 402 Payment Required"],
+  ["proof", "The agent builds a zero-knowledge proof"],
+  ["verify", "The facilitator verifies it"],
+  ["settle", "The pool pays the merchant on Base Sepolia"],
+  ["data", "The agent gets its data"],
+  ["refund", "The merchant refunds by request id"],
+];
+function skeleton() {
+  steps.innerHTML = ""; for (const k in rows) delete rows[k];
+  for (const [k, t] of PLAN) { row(k, "todo", t); rows[k].classList.add("todo"); }
+}
+function light(ids) {
+  for (const id of ["n-agent", "n-pool", "n-merchant", "l-proof", "l-pay"]) document.getElementById(id).classList.toggle("lit", ids.includes(id));
+}
+skeleton();
 function row(key, state, title, detail = "") {
   let li = rows[key];
   if (!li) { li = document.createElement("li"); steps.appendChild(li); rows[key] = li; }
+  li.classList.remove("todo");
   li.innerHTML = `<span class="icon ${state}"></span><div><div class="title">${title}</div>${detail ? `<div class="detail">${detail}</div>` : ""}</div>`;
 }
 const ms = (x) => x != null ? ` <span class="ms">${x < 1000 ? x + " ms" : (x / 1000).toFixed(1) + " s"}</span>` : "";
@@ -153,7 +206,7 @@ function setBusy(b) { $("#run-agent").disabled = b; $("#run-wallet").disabled = 
 
 function run(as) {
   setBusy(true);
-  steps.innerHTML = ""; for (const k in rows) delete rows[k];
+  skeleton();
   $("#public").innerHTML = `<li class="empty">Waiting for the transaction…</li>`;
   let n = 0, payer = as;
   const es = new EventSource(`/demo/run?as=${as}`);
@@ -175,7 +228,7 @@ function run(as) {
           `price ${price} · scheme <code>${esc(a.scheme || "shielded")}</code> · pay to ${a.payTo ? addrLink(a.payTo) : ""} · modes: ${esc((a.extra?.paymentModes || []).join(", "))}`);
         break;
       }
-      case "proving":
+      case "proving": light(["n-agent"]);
         row("proof", "run", `Building a zero-knowledge proof <span class="ms">(${e.circuit})</span>`,
           e.circuit === "policy_pay" ? "Proving: I own an unspent note from an approved deposit, the merchant is Grayr-verified (level ≥ 2, category “data”), 0.10 ≤ my 1.00 per-payment cap, and it fits my daily budget." : "Proving: I own an unspent note from an approved deposit, worth at least the price.");
         break;
@@ -187,8 +240,8 @@ function run(as) {
         row("verify", e.ok ? "ok" : "err", e.ok ? "The facilitator verified it" + ms(e.ms) : "The facilitator rejected it",
           e.ok ? "It checked the terms (amount, merchant, request id), then simulated the pool call, which runs the on-chain proof verifier." : esc(e.detail || ""));
         break;
-      case "settling": row("settle", "run", "The relayer submits it to Base Sepolia…"); break;
-      case "settle":
+      case "settling": light(["n-agent", "l-proof", "n-pool"]); row("settle", "run", "The relayer submits it to Base Sepolia…"); break;
+      case "settle": if (e.ok) light(["n-pool", "l-pay", "n-merchant"]);
         row("settle", e.ok ? "ok" : "err", e.ok ? "Settled on chain: the pool verified the proof and paid the merchant" + ms(e.ms) : "Settlement failed",
           e.ok ? txLink(e.tx) : esc(e.detail || ""));
         break;
@@ -204,8 +257,8 @@ function run(as) {
         break;
       }
       case "refund": row("refund", "ok", "The merchant refunds by request id (this keeps the demo free)", `${txLink(e.tx)} · the money comes back as a new private note only the payer can open`); break;
-      case "done": row("done", "ok", "Done" + ms(e.ms)); finish(); break;
-      case "error": row("error", "err", "Stopped", esc(e.detail || "")); finish(); break;
+      case "done": row("done", "ok", "Done" + ms(e.ms)); light([]); finish(); break;
+      case "error": row("error", "err", "Stopped", esc(e.detail || "")); light([]); finish(); break;
     }
   };
   es.onerror = () => { if (!rows.done && !rows.error) row("error", "err", "Connection lost", "Refresh and try again."); finish(); };

@@ -38,7 +38,7 @@ import {ZK_DIR} from "../src/devnet.js";
 import {$, DOMAIN, dep, fromBlock, me, openWallets, pool, publicClient, read, send, syncAssociationSet, U, usdc, wallet} from "./testnet-env.js";
 
 const PORT = Number(process.env.DEMO_PORT ?? 8787);
-const PUBLIC_URL = process.env.DEMO_PUBLIC_URL ?? `http://127.0.0.1:${PORT}`;
+const PUBLIC_URL = process.env.DEMO_PUBLIC_URL || `http://127.0.0.1:${PORT}`;
 const MAX_PER_DAY = Number(process.env.DEMO_MAX_PER_DAY ?? 150);
 /** ASSUMPTION: ~40 runs of headroom at ~0.000013 ETH per run (live receipts 2026-10-17). */
 const MIN_ETH = BigInt(Math.round(Number(process.env.DEMO_MIN_ETH ?? 0.0005) * 1e18));
