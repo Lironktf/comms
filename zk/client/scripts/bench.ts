@@ -16,14 +16,14 @@ import {join} from "node:path";
 import {encodeAbiParameters, type Address} from "viem";
 import {Prover, type CircuitName} from "../src/prover.js";
 import {witness} from "./fixtures.js";
-import {approve, mintUsdc, registerVerifiedVendor, startDevnet, ZK_DIR, type Devnet} from "../src/devnet.js";
+import {approve, increaseTime, mintUsdc, registerVerifiedVendor, startDevnet, ZK_DIR, type Devnet} from "../src/devnet.js";
 import {AspService, blocklistRule} from "../src/asp.js";
 import {PoolSync} from "../src/chain.js";
 import {deriveAdminKeys, deriveAgentKeys, deriveSpendingKeys} from "../src/keys.js";
 import {AgentWallet, prepareBudgetInit, ShieldedWallet, type Bundle} from "../src/wallet.js";
 import {VendorTreeSync} from "../src/vendors.js";
 import {policyHash} from "../src/hashes.js";
-import {submitBatch, submitBundle, submitRagequit} from "../src/pool.js";
+import {claimEscrow, expireEscrow, merchantRefund, submitBatch, submitBundle, submitEscrowRelease, submitRagequit} from "../src/pool.js";
 import {shieldedPoolAbi} from "../src/abi.js";
 
 const RUNS = Number(process.argv[process.argv.indexOf("--runs") + 1]) || 10;
@@ -142,6 +142,28 @@ async function gas() {
     out.initBudget = Number((await relay(await prepareBudgetInit({prover, admin, policy, agent: agent.address, chainId: 31337n, pool: d.deployment.pool, timestamp: (await d.publicClient.getBlock()).timestamp}))).gasUsed);
     out.payWithPolicy = Number((await relay(await agent.preparePolicyPayment({amount: 2_000000n, recipient: merchant}))).gasUsed);
 
+    // refunds + escrow (PaymentBook)
+    const payOf = async (w: ShieldedWallet, b: Bundle) => {
+      await w.refresh();
+      return w.opts.sync.payments.get((b as Extract<Bundle, {kind: "pay" | "policyPay"}>).inputs.nullifiers[0])!;
+    };
+    const esc = {mode: "escrow" as const, claimAfterSeconds: 3600n, expireAfterSeconds: 86400n};
+    const rb = await a.preparePayment({token: d.deployment.usdc, amount: 5_000000n, recipient: merchant, terms: {mode: "refundable"}});
+    out.pay_refundable = Number((await relay(rb)).gasUsed);
+    out.refund_partial = Number((await merchantRefund(d.wallet(4), d.publicClient, d.deployment.pool, await payOf(a, rb), 1_000000n)).gasUsed);
+    const e1 = await a.preparePayment({token: d.deployment.usdc, amount: 5_000000n, recipient: merchant, terms: esc});
+    out.pay_escrow = Number((await relay(e1)).gasUsed);
+    out.escrow_release = Number((await submitEscrowRelease(d.wallet(3), d.publicClient, d.deployment.pool, a.escrowRelease((await payOf(a, e1)).id))).gasUsed);
+    const e2 = await a.preparePayment({token: d.deployment.usdc, amount: 5_000000n, recipient: merchant, terms: esc});
+    await relay(e2);
+    const e3 = await a.preparePayment({token: d.deployment.usdc, amount: 5_000000n, recipient: merchant, terms: esc});
+    await relay(e3);
+    await increaseTime(d, 3601);
+    out.escrow_claim_full = Number((await claimEscrow(d.wallet(4), d.publicClient, d.deployment.pool, await payOf(a, e2))).gasUsed);
+    await increaseTime(d, 86400);
+    out.escrow_expire_refund = Number((await expireEscrow(d.wallet(3), d.publicClient, d.deployment.pool, await payOf(a, e3))).gasUsed);
+    out.payWithPolicy_refundable = Number((await relay(await agent.preparePolicyPayment({amount: 2_000000n, recipient: merchant, terms: {mode: "refundable"}}))).gasUsed);
+
     // batches: k independent payers, one tx
     for (const k of [1, 2, 4, 8]) {
       const ws = Array.from({length: k}, (_, i) => mk(100 + k * 10 + i));
@@ -153,6 +175,19 @@ async function gas() {
       out[`batch_${k}_total`] = Number(r.gasUsed);
       out[`batch_${k}_per_payment`] = Math.round(Number(r.gasUsed) / k);
       process.stdout.write(`  batch ${k}: ${Math.round(Number(r.gasUsed) / k)} gas/payment\n`);
+    }
+    // mixed batch of 8: 4 direct transact + 4 refundable pay (different payers), one pool.batch
+    {
+      const ws = Array.from({length: 8}, (_, i) => mk(200 + i));
+      for (const w of ws) await dep(w, 10_000000n);
+      await pub();
+      const bundles: Bundle[] = [];
+      for (const [i, w] of ws.entries()) {
+        bundles.push(await w.preparePayment({token: d.deployment.usdc, amount: 1_000000n, recipient: merchant, terms: i % 2 ? {mode: "refundable"} : undefined}));
+      }
+      const r = await submitBatch(d.wallet(2), d.publicClient, d.deployment.pool, bundles);
+      out.batch_8_mixed_total = Number(r.gasUsed);
+      out.batch_8_mixed_per_payment = Math.round(Number(r.gasUsed) / 8);
     }
   } finally {
     await prover.destroy();

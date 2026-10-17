@@ -22,7 +22,7 @@ import {Prover} from "../src/prover.js";
 import {AgentWallet, prepareBudgetInit, ShieldedWallet} from "../src/wallet.js";
 import {VendorTreeSync} from "../src/vendors.js";
 import {policyHash, type PolicyParams} from "../src/hashes.js";
-import {submitBundle} from "../src/pool.js";
+import {merchantRefund, submitBundle} from "../src/pool.js";
 import {Relayer} from "../src/relayer.js";
 import {shieldedPoolAbi} from "../src/abi.js";
 import {localFacilitatorClient, PoolExactClientScheme, ShieldedClientScheme, ShieldedFacilitatorScheme, ShieldedServerScheme} from "../src/x402/index.js";
@@ -85,7 +85,8 @@ const url = await listen(app);
 ok(`GET ${url}/forecast costs $0.50`);
 
 step("Agent calls the API 3 times; each call = 402 → ZK proof (policy enforced inside) → paid → 200");
-const pay = wrapFetchWithPayment(fetch, new x402Client().register(NET, new ShieldedClientScheme({wallet: agent, maxFee: U(0.02)})));
+// "refundable": the merchant is paid at once but can refund later, privately (refunds-escrow.md)
+const pay = wrapFetchWithPayment(fetch, new x402Client().register(NET, new ShieldedClientScheme({wallet: agent, maxFee: U(0.02), terms: {mode: "refundable"}})));
 for (let i = 1; i <= 3; i++) {
   const t0 = Date.now();
   const res = await pay(`${url}/forecast`);
@@ -102,6 +103,14 @@ try {
 } catch (e) {
   ok(`refused: ${(e as Error).message.replace(/^.*?policy: /, "policy: ")}`);
 }
+
+step("The merchant refunds call 3 by its x402 request id: it never learns who paid");
+await agent.refresh();
+const lastPayment = agent.payments().at(-1)!;
+const before = agent.balance(d.deployment.usdc);
+await merchantRefund(d.wallet(WEATHER), d.publicClient, d.deployment.pool, lastPayment, U(0.5));
+await agent.refresh();
+ok(`agent balance ${$(before)} → ${$(agent.balance(d.deployment.usdc))}; the refund is a private, policy-bound note`);
 
 step("What the public chain shows for those payments");
 const logs = await d.publicClient.getLogs({address: d.deployment.pool, fromBlock: 0n});
