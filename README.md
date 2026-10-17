@@ -42,7 +42,7 @@ human approval, and a tamper-evident receipt chain.
 | **Agent identity + mandates + KYB** — Web-Bot-Auth-style agent verification, AP2 mandate verification, pluggable KYB → level-3 attestation | `backend/src/crypto/agentAuth.ts`, `backend/src/services/kyb/` |
 | Event indexer (reorg-aware, replayable), REST API, TypeScript SDK, deploy scripts, CI | `backend/`, `sdk/`, `contracts/script/`, `.github/` |
 
-**Live on Base Sepolia (testnet):** VendorRegistry `0xaa77A898e44C23d31eE6B54561F9ec8A375328B6`, AttestationRegistry `0x1a06C6bE8894d6A5771B61ba62c3355e2A261256` — see `contracts/deployments/base-sepolia.json`. A Solana/Anchor port of the registry is in `solana/` (written, unbuilt). Full inventory: [`docs/OVERVIEW.md`](docs/OVERVIEW.md).
+**Live on Base Sepolia (testnet):** VendorRegistry `0x854c3D3D610F7470C28192926dF0b227257E86fc`, AttestationRegistry `0xa0B4dfD191d689c84d6668096F29efe0A805AB2a` — see `contracts/deployments/base-sepolia.json`. A Solana/Anchor port of the registry is in `solana/` (written, unbuilt). Full inventory: [`docs/OVERVIEW.md`](docs/OVERVIEW.md).
 
 ## Private agent payments (ZK layer)
 

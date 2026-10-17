@@ -30,15 +30,15 @@ Base Sepolia USDC.
 ```bash
 cd zk/contracts
 export BASE_SEPOLIA_RPC_URL=https://sepolia.base.org
-export VENDOR_REGISTRY=0xaa77A898e44C23d31eE6B54561F9ec8A375328B6
-export ATTESTATION_REGISTRY=0x1a06C6bE8894d6A5771B61ba62c3355e2A261256
+export VENDOR_REGISTRY=0x854c3D3D610F7470C28192926dF0b227257E86fc
+export ATTESTATION_REGISTRY=0xa0B4dfD191d689c84d6668096F29efe0A805AB2a
 export USDC=0x036CbD53842c5426634e7929541eC2318f3dCF7e
 export ASP_POSTMAN=<address that will publish association-set roots>
 export OWNER=<pool owner: token config only; ideally a Safe>
 # optional private swaps: a SwapRouter02 on Base Sepolia + a WETH address
 # export SWAP_ROUTER=... ; export WETH=...
 
-forge script script/Deploy.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL --broadcast \
+forge script script/Deploy.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL --broadcast --sender <YOUR_ADDRESS> \
   --private-key <YOUR_TESTNET_KEY>          # or: --account <foundry keystore name>
 # writes zk/contracts/deployments/84532.json
 ```
@@ -54,12 +54,18 @@ token config ~50k each.
   0.00016 ETH. Have ~0.001 ETH on the deployer.
 - `deployments/84532.json` now also lists `paymentBook`.
 
-Funding the deployer: the Grayr admin address that deployed the registries
-(`0x009184F4…B810`) held 0.04 Base Sepolia ETH on 2026-10-17. Send some to your deploy key:
+Funding the deployer without a Base balance (how it was done on 2026-10-17):
+1. Get Ethereum Sepolia ETH from a faucet.
+2. Bridge it with a plain ETH send to Base's Sepolia L1StandardBridge. It arrived on Base Sepolia
+   at the same address in about 5 minutes.
 
 ```bash
-cast send <deployer address> --value 0.005ether --rpc-url https://sepolia.base.org --account <grayr admin keystore>
+cast send 0xfd0Bf71F60660E2f608ed56e1659C450eB113120 --value 0.02ether --rpc-url https://ethereum-sepolia-rpc.publicnode.com --account <keystore>
 ```
+
+With `--account`, always also pass `--sender <that address>`. Both deploy scripts default roles
+and ownership to `msg.sender`, and without `--sender` Forge simulates with a placeholder address
+(it refuses to broadcast, but only after showing roles granted to the wrong account).
 
 ### Post-deploy (also broadcasts)
 
