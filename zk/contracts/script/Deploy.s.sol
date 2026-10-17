@@ -149,6 +149,7 @@ contract Deploy is Script {
         vm.serializeAddress(j, "weth", d.weth);
         vm.serializeAddress(j, "swapRouter", d.swapRouter);
         vm.serializeAddress(j, "swapAdapter", d.swapAdapter);
+        vm.serializeAddress(j, "paymentBook", address(ShieldedPool(d.pool).paymentBook()));
         vm.serializeUint(j, "deployBlock", block.number);
         string memory out = vm.serializeAddress(j, "pool", d.pool);
         string memory file = local ? "deployments/anvil.json" : string.concat("deployments/", vm.toString(block.chainid), ".json");

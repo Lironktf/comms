@@ -13,6 +13,7 @@ import {ISwapAdapter} from "./interfaces/ISwapAdapter.sol";
 import {IPoseidon2} from "./interfaces/IPoseidon2.sol";
 import {MerkleTree} from "./libraries/MerkleTree.sol";
 import {ShieldedHashes} from "./libraries/ShieldedHashes.sol";
+import {PaymentBook, PaymentRecord} from "./PaymentBook.sol";
 
 /// @title ShieldedPool — private agent payments on Base.
 /// @notice One vault holding everyone's tokens plus a Merkle tree of note commitments.
@@ -22,13 +23,18 @@ import {ShieldedHashes} from "./libraries/ShieldedHashes.sol";
 ///
 ///         Entry points:
 ///           deposit             public: tokens in, commitment inserted, label assigned
-///           transact[Batch]     private transfer / pay a merchant / withdraw (2-in-2-out)
-///           payWithPolicy[Batch] agent payment with spending policy enforced in-proof
+///           transact            private transfer / pay a merchant / withdraw (2-in-2-out)
+///           pay                 refundable or escrowed payment (transact proof, deferred mode)
+///           payWithPolicy       agent payment with spending policy enforced in-proof
+///                               (direct, refundable or escrowed)
+///           batch               any mix of the above in ONE transaction and ONE tree insertion
 ///           initBudget          policy admin mints an agent's budget note
 ///           ragequit            public exit to the original depositor (compliance)
 ///           authorizeTransfer   Path B: approve one EIP-3009 transfer FROM the pool (EIP-1271)
 ///           reclaimAuthorization refund an expired, unused Path-B authorization as a note
 ///           swap                private swap through an allowlisted adapter (Railgun-style)
+///           (PaymentBook)       refunds and the escrow lifecycle (see docs/refunds-escrow.md);
+///                               refund notes come back through shieldRefund
 ///
 ///         Ordering in every spend (checks-effects-interactions): validate public inputs and
 ///         roots -> verify proof -> record nullifiers -> insert commitments -> external transfers.
@@ -65,6 +71,8 @@ contract ShieldedPool is ReentrancyGuard, Ownable2Step {
         uint256 budgetNullifier;
         uint256 changeCommitment;
         uint256 newBudgetCommitment;
+        /// core of the agent's refund note (same owner, policy, label; circuit-constrained)
+        uint256 refundCore;
         uint256 amount;
         uint256 fee;
         address token;
@@ -87,10 +95,34 @@ contract ShieldedPool is ReentrancyGuard, Ownable2Step {
         ExtData ext;
     }
 
+    /// How a payment settles. Bound into the proof through `context` (extra = keccak(opts)),
+    /// so a relayer can't turn an escrow into a direct payment or swap the refund ciphertext.
+    ///   DIRECT      merchant paid now, no refund slot (payWithPolicy only; plain = transact)
+    ///   REFUNDABLE  merchant paid now; it may later refund up to `amount` into the payer's
+    ///               refund note without ever learning who the payer is
+    ///   ESCROW      pool holds the funds; see the escrow functions
+    struct PayOptions {
+        uint8 mode;
+        address arbiter; // escrow: may resolve disputes (0 = no disputes possible)
+        uint64 claimableAt; // escrow: merchant may claim from here; payer may dispute before
+        uint64 expiresAt; // escrow: unclaimed/unresolved escrow refunds to the payer from here
+        /// escrow: keccak256(abi.encode(keccak256(releaseSecret), keccak256(disputeSecret)))
+        bytes32 payerAuth;
+        bytes encryptedRefund; // ciphertext of the refund note (amount/token come from events)
+    }
+
     struct PolicyCall {
         bytes proof;
         PolicyInputs inputs;
         ExtData ext;
+        PayOptions opts;
+    }
+
+    struct PayCall {
+        bytes proof;
+        TransactInputs inputs;
+        ExtData ext;
+        PayOptions opts;
     }
 
     struct Authorization3009 {
@@ -143,6 +175,10 @@ contract ShieldedPool is ReentrancyGuard, Ownable2Step {
     uint8 internal constant KIND_BUDGET_INIT = 3;
     uint8 internal constant KIND_AUTHORIZE = 4;
     uint8 internal constant KIND_SWAP = 5;
+    uint8 internal constant KIND_PAY = 6;
+
+    uint8 internal constant MODE_DIRECT = 0;
+    uint8 internal constant MODE_ESCROW = 2;
 
     /// keccak256("TransferWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)")
     /// = 0x7c7c6cdb67a18743f49ec6fa9b35f50d52ed05cbed4cc592e13b44501c1a2267 (FiatToken EIP3009.sol)
@@ -161,6 +197,8 @@ contract ShieldedPool is ReentrancyGuard, Ownable2Step {
     IAssociationSet public immutable associationSet;
     IVendorTree public immutable vendorTree;
     IPoseidon2 public immutable poseidon2;
+    /// Refund slots and escrow lifecycle (deployed by this constructor; holds escrowed funds).
+    PaymentBook public immutable paymentBook;
 
     // ------------------------------------------------------------------
     // State
@@ -220,6 +258,8 @@ contract ShieldedPool is ReentrancyGuard, Ownable2Step {
         uint256 amountOut,
         uint256 outLeafIndex
     );
+    /// A refund note was created for payment `id` (merchant refund or escrow return).
+    event Refunded(uint256 indexed id, uint256 amount, uint256 commitment, uint256 leafIndex);
     event TokenConfigured(address indexed token, bool depositsEnabled, bool eip3009, uint128 maxDeposit);
     event SwapAdapterSet(address indexed adapter, bool allowed);
 
@@ -256,6 +296,8 @@ contract ShieldedPool is ReentrancyGuard, Ownable2Step {
     error SlippageExceeded(uint256 got, uint256 min);
     error SameToken();
     error EmptyBatch();
+    error BadPayMode(uint8 mode);
+    error NotPaymentBook();
 
     constructor(
         IHonkVerifier transactVerifier_,
@@ -274,6 +316,7 @@ contract ShieldedPool is ReentrancyGuard, Ownable2Step {
         associationSet = associationSet_;
         vendorTree = vendorTree_;
         poseidon2 = poseidon2_;
+        paymentBook = new PaymentBook(vendorTree_);
         _tree.init();
     }
 
@@ -358,67 +401,87 @@ contract ShieldedPool is ReentrancyGuard, Ownable2Step {
         _payout(inputs.token, inputs.recipient, inputs.publicAmount, inputs.fee, ext);
     }
 
-    /// @notice Submit many transact proofs in one transaction (relayers/facilitators).
-    ///         All proofs must be valid (atomic). Payments can go to different merchants.
-    ///         Saves the per-tx base cost and inserts all outputs as ONE tree batch.
-    function transactBatch(TransactCall[] calldata calls) external nonReentrant {
-        uint256 n = calls.length;
-        if (n == 0) revert EmptyBatch();
-        uint256[] memory leaves = new uint256[](2 * n);
-        for (uint256 i; i < n; ++i) {
-            TransactCall calldata c = calls[i];
-            _verifyTransact(c.proof, c.inputs, c.ext, false, _context(KIND_TRANSACT, c.ext, bytes32(0)));
-            leaves[2 * i] = c.inputs.outCommitments[0];
-            leaves[2 * i + 1] = c.inputs.outCommitments[1];
-        }
-        uint256 start = _tree.insert(poseidon2, leaves);
-        for (uint256 i; i < n; ++i) {
-            TransactCall calldata c = calls[i];
-            emit NewCommitment(leaves[2 * i], start + 2 * i, c.ext.encryptedOutput0);
-            emit NewCommitment(leaves[2 * i + 1], start + 2 * i + 1, c.ext.encryptedOutput1);
-        }
-        for (uint256 i; i < n; ++i) {
-            TransactCall calldata c = calls[i];
-            _payout(c.inputs.token, c.inputs.recipient, c.inputs.publicAmount, c.inputs.fee, c.ext);
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // Spends: policy-enforced agent payments
-    // ------------------------------------------------------------------
-
-    function payWithPolicy(bytes calldata proof, PolicyInputs calldata inputs, ExtData calldata ext)
+    /// @notice Refundable or escrowed payment from plain notes: a `transact` proof in DEFERRED
+    ///         mode whose out1 is the payer's refund-note core (never inserted unless refunded).
+    ///         REFUNDABLE pays the merchant now; ESCROW keeps `publicAmount` in the pool.
+    function pay(bytes calldata proof, TransactInputs calldata inputs, ExtData calldata ext, PayOptions calldata opts)
         external
         nonReentrant
     {
-        _verifyPolicy(proof, inputs, ext);
+        uint256[] memory leaves = new uint256[](2);
+        leaves[0] = _verifyPay(proof, inputs, ext, opts);
+        uint256 start = _tree.insert(poseidon2, leaves);
+        emit NewCommitment(leaves[0], start, ext.encryptedOutput0);
+        _settlePay(inputs.nullifiers[0], inputs.token, inputs.recipient, inputs.publicAmount, inputs.fee, inputs.outCommitments[1], false, ext, opts);
+    }
+
+    function payWithPolicy(bytes calldata proof, PolicyInputs calldata inputs, ExtData calldata ext, PayOptions calldata opts)
+        external
+        nonReentrant
+    {
+        _verifyPolicy(proof, inputs, ext, opts);
         uint256[] memory leaves = new uint256[](2);
         leaves[0] = inputs.changeCommitment;
         leaves[1] = inputs.newBudgetCommitment;
         uint256 start = _tree.insert(poseidon2, leaves);
         _emitOutputs(start, leaves, ext);
-        _payout(inputs.token, inputs.recipient, inputs.amount, inputs.fee, ext);
+        _settlePolicy(inputs, ext, opts);
     }
 
-    function payWithPolicyBatch(PolicyCall[] calldata calls) external nonReentrant {
-        uint256 n = calls.length;
-        if (n == 0) revert EmptyBatch();
-        uint256[] memory leaves = new uint256[](2 * n);
-        for (uint256 i; i < n; ++i) {
-            PolicyCall calldata c = calls[i];
-            _verifyPolicy(c.proof, c.inputs, c.ext);
-            leaves[2 * i] = c.inputs.changeCommitment;
-            leaves[2 * i + 1] = c.inputs.newBudgetCommitment;
+    /// @notice Submit any mix of transact, pay and policy proofs in ONE transaction
+    ///         (relayers/facilitators). All must be valid (atomic). Saves the per-tx base cost
+    ///         and inserts every output as ONE tree batch; payments may go to different merchants,
+    ///         which also blurs timing (several payers, one transaction).
+    function batch(TransactCall[] calldata transacts, PayCall[] calldata pays, PolicyCall[] calldata policyPays)
+        external
+        nonReentrant
+    {
+        uint256 nt = transacts.length;
+        uint256 np = pays.length;
+        uint256 nq = policyPays.length;
+        if (nt + np + nq == 0) revert EmptyBatch();
+        // leaf layout: [transact pairs][pay change, 0][policy change, budget]
+        uint256[] memory leaves = new uint256[](2 * (nt + np + nq));
+        for (uint256 i; i < nt; ++i) {
+            TransactCall calldata c = transacts[i];
+            _verifyTransact(c.proof, c.inputs, c.ext, false, _context(KIND_TRANSACT, c.ext, bytes32(0)));
+            leaves[2 * i] = c.inputs.outCommitments[0];
+            leaves[2 * i + 1] = c.inputs.outCommitments[1];
+        }
+        for (uint256 i; i < np; ++i) {
+            PayCall calldata c = pays[i];
+            leaves[2 * (nt + i)] = _verifyPay(c.proof, c.inputs, c.ext, c.opts);
+        }
+        for (uint256 i; i < nq; ++i) {
+            PolicyCall calldata c = policyPays[i];
+            _verifyPolicy(c.proof, c.inputs, c.ext, c.opts);
+            leaves[2 * (nt + np + i)] = c.inputs.changeCommitment;
+            leaves[2 * (nt + np + i) + 1] = c.inputs.newBudgetCommitment;
         }
         uint256 start = _tree.insert(poseidon2, leaves);
-        for (uint256 i; i < n; ++i) {
-            PolicyCall calldata c = calls[i];
-            emit NewCommitment(leaves[2 * i], start + 2 * i, c.ext.encryptedOutput0);
-            emit NewCommitment(leaves[2 * i + 1], start + 2 * i + 1, c.ext.encryptedOutput1);
+        for (uint256 i; i < nt; ++i) {
+            emit NewCommitment(leaves[2 * i], start + 2 * i, transacts[i].ext.encryptedOutput0);
+            emit NewCommitment(leaves[2 * i + 1], start + 2 * i + 1, transacts[i].ext.encryptedOutput1);
         }
-        for (uint256 i; i < n; ++i) {
-            PolicyCall calldata c = calls[i];
-            _payout(c.inputs.token, c.inputs.recipient, c.inputs.amount, c.inputs.fee, c.ext);
+        for (uint256 i; i < np; ++i) {
+            emit NewCommitment(leaves[2 * (nt + i)], start + 2 * (nt + i), pays[i].ext.encryptedOutput0);
+        }
+        for (uint256 i; i < nq; ++i) {
+            uint256 k = 2 * (nt + np + i);
+            emit NewCommitment(leaves[k], start + k, policyPays[i].ext.encryptedOutput0);
+            emit NewCommitment(leaves[k + 1], start + k + 1, policyPays[i].ext.encryptedOutput1);
+        }
+        // interactions last
+        for (uint256 i; i < nt; ++i) {
+            TransactCall calldata c = transacts[i];
+            _payout(c.inputs.token, c.inputs.recipient, c.inputs.publicAmount, c.inputs.fee, c.ext);
+        }
+        for (uint256 i; i < np; ++i) {
+            PayCall calldata c = pays[i];
+            _settlePay(c.inputs.nullifiers[0], c.inputs.token, c.inputs.recipient, c.inputs.publicAmount, c.inputs.fee, c.inputs.outCommitments[1], false, c.ext, c.opts);
+        }
+        for (uint256 i; i < nq; ++i) {
+            _settlePolicy(policyPays[i].inputs, policyPays[i].ext, policyPays[i].opts);
         }
     }
 
@@ -624,6 +687,27 @@ contract ShieldedPool is ReentrancyGuard, Ownable2Step {
     }
 
     // ------------------------------------------------------------------
+    // Refund notes (called by this pool's PaymentBook)
+    // ------------------------------------------------------------------
+
+    /// @notice Turn `amount` of `token`, already transferred to the pool by the PaymentBook, into
+    ///         the payer's refund note H3(amount, token, refundCore). Only the book this pool
+    ///         deployed can call it; the book only does so for refund cores bound in a proof.
+    function shieldRefund(uint256 id, address token, uint256 amount, uint256 refundCore)
+        external
+        nonReentrant
+        returns (uint256 commitment, uint256 leafIndex)
+    {
+        if (msg.sender != address(paymentBook)) revert NotPaymentBook();
+        commitment = ShieldedHashes.commitment(poseidon2, amount, token, refundCore);
+        uint256[] memory leaves = new uint256[](2);
+        leaves[0] = commitment;
+        leafIndex = _tree.insert(poseidon2, leaves);
+        emit NewCommitment(commitment, leafIndex, "");
+        emit Refunded(id, amount, commitment, leafIndex);
+    }
+
+    // ------------------------------------------------------------------
     // Views
     // ------------------------------------------------------------------
 
@@ -695,7 +779,9 @@ contract ShieldedPool is ReentrancyGuard, Ownable2Step {
         emit NewNullifier(inputs.nullifiers[1]);
     }
 
-    function _verifyPolicy(bytes calldata proof, PolicyInputs calldata inputs, ExtData calldata ext) internal {
+    function _verifyPolicy(bytes calldata proof, PolicyInputs calldata inputs, ExtData calldata ext, PayOptions calldata opts)
+        internal
+    {
         if (!tokenConfig[inputs.token].known) revert UnknownToken(inputs.token);
         _checkExt(ext);
         _checkTimestamp(inputs.timestamp);
@@ -704,6 +790,8 @@ contract ShieldedPool is ReentrancyGuard, Ownable2Step {
         _checkField(inputs.budgetNullifier);
         _checkField(inputs.changeCommitment);
         _checkField(inputs.newBudgetCommitment);
+        _checkField(inputs.refundCore);
+        _checkMode(opts.mode, true);
         if (inputs.amount == 0) revert ZeroAmount();
         if (inputs.amount > MAX_AMOUNT) revert AmountTooLarge(inputs.amount);
         if (inputs.fee > MAX_AMOUNT) revert AmountTooLarge(inputs.fee);
@@ -727,7 +815,7 @@ contract ShieldedPool is ReentrancyGuard, Ownable2Step {
         if (nullifierSpent[n1]) revert NullifierSpent(n1);
         if (nullifierSpent[nb]) revert NullifierSpent(nb);
 
-        bytes32[] memory pub = new bytes32[](15);
+        bytes32[] memory pub = new bytes32[](16);
         pub[0] = bytes32(inputs.root);
         pub[1] = bytes32(inputs.aspRoot);
         pub[2] = bytes32(inputs.vendorRoot);
@@ -737,12 +825,13 @@ contract ShieldedPool is ReentrancyGuard, Ownable2Step {
         pub[6] = bytes32(nb);
         pub[7] = bytes32(inputs.changeCommitment);
         pub[8] = bytes32(inputs.newBudgetCommitment);
-        pub[9] = bytes32(inputs.amount);
-        pub[10] = bytes32(inputs.fee);
-        pub[11] = bytes32(uint256(uint160(inputs.token)));
-        pub[12] = bytes32(uint256(uint160(inputs.recipient)));
-        pub[13] = bytes32(uint256(inputs.timestamp));
-        pub[14] = bytes32(_context(KIND_POLICY_PAY, ext, bytes32(0)));
+        pub[9] = bytes32(inputs.refundCore);
+        pub[10] = bytes32(inputs.amount);
+        pub[11] = bytes32(inputs.fee);
+        pub[12] = bytes32(uint256(uint160(inputs.token)));
+        pub[13] = bytes32(uint256(uint160(inputs.recipient)));
+        pub[14] = bytes32(uint256(inputs.timestamp));
+        pub[15] = bytes32(_context(KIND_POLICY_PAY, ext, _payExtra(opts)));
         _verify(policyPayVerifier, proof, pub);
 
         nullifierSpent[n0] = true;
@@ -751,6 +840,75 @@ contract ShieldedPool is ReentrancyGuard, Ownable2Step {
         emit NewNullifier(n0);
         emit NewNullifier(n1);
         emit NewNullifier(nb);
+    }
+
+    /// Checks a deferred-mode transact proof for `pay`; returns the change commitment to insert.
+    function _verifyPay(bytes calldata proof, TransactInputs calldata inputs, ExtData calldata ext, PayOptions calldata opts)
+        internal
+        returns (uint256 change)
+    {
+        _checkMode(opts.mode, false); // plain payments use transact
+        if (inputs.publicAmount == 0) revert ZeroAmount();
+        _verifyTransact(proof, inputs, ext, true, _context(KIND_PAY, ext, _payExtra(opts)));
+        return inputs.outCommitments[0];
+    }
+
+    function _settlePolicy(PolicyInputs calldata inputs, ExtData calldata ext, PayOptions calldata opts) internal {
+        _settlePay(
+            inputs.nullifiers[0], inputs.token, inputs.recipient, inputs.amount, inputs.fee, inputs.refundCore,
+            inputs.vendorChecked, ext, opts
+        );
+    }
+
+    /// Records the refund slot / escrow, then pays the merchant (unless escrowed) and the fee.
+    function _settlePay(
+        uint256 id,
+        address token,
+        address merchant,
+        uint256 amount,
+        uint256 fee,
+        uint256 refundCore,
+        bool vendorChecked,
+        ExtData calldata ext,
+        PayOptions calldata opts
+    ) internal {
+        if (opts.mode != MODE_DIRECT) {
+            // id = first nullifier: unique, because it was just marked spent. The book checks
+            // the terms, stores keccak(record) and emits PaymentRecorded.
+            paymentBook.open(
+                id,
+                PaymentRecord({
+                    mode: opts.mode,
+                    vendorChecked: vendorChecked,
+                    merchant: merchant,
+                    token: token,
+                    amount: uint128(amount),
+                    refundCore: refundCore,
+                    arbiter: opts.arbiter,
+                    claimableAt: opts.claimableAt,
+                    expiresAt: opts.expiresAt,
+                    payerAuth: opts.payerAuth
+                }),
+                ext.requestId,
+                opts.encryptedRefund
+            );
+        }
+        if (opts.mode == MODE_ESCROW) {
+            // escrowed funds wait in the book, not the pool
+            IERC20(token).safeTransfer(address(paymentBook), amount);
+            _payout(token, address(0), 0, fee, ext);
+        } else {
+            _payout(token, merchant, amount, fee, ext);
+        }
+    }
+
+    /// Terms are validated by PaymentBook.open (non-direct modes); here only the mode itself.
+    function _checkMode(uint8 mode, bool allowDirect) internal pure {
+        if (mode > MODE_ESCROW || (mode == MODE_DIRECT && !allowDirect)) revert BadPayMode(mode);
+    }
+
+    function _payExtra(PayOptions calldata o) internal pure returns (bytes32) {
+        return keccak256(abi.encode(o.mode, o.arbiter, o.claimableAt, o.expiresAt, o.payerAuth, keccak256(o.encryptedRefund)));
     }
 
     function _verify(IHonkVerifier verifier, bytes calldata proof, bytes32[] memory pub) internal view {
