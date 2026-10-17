@@ -1,8 +1,8 @@
-# Deploying (you run these; nothing here has been broadcast)
+# Deploying
 
-Everything has been built and tested on local anvil only. **Testnet only. Never mainnet, never
-real funds.** Use a throwaway testnet key that you control. These commands broadcast
-transactions, which is why they are for you to run.
+**Testnet only. Never mainnet, never real funds.** Use a throwaway testnet key that you control.
+The stack is live on Base Sepolia (addresses in `contracts/deployments/84532.json`, deployed
+2026-10-17) and every flow has been run against it; see [Live on Base Sepolia](#5-live-on-base-sepolia).
 
 ## 0. Prerequisites (pinned toolchain)
 
@@ -92,6 +92,15 @@ FORK_URL=https://sepolia.base.org USDC_ADDR=0x036CbD53842c5426634e7929541eC2318f
   (e.g. 250 ms). viem's default of 4 s was the dominant latency in local measurements: a paid
   x402 call took 5.4 s instead of 1.45 s.
 - **ASP.** `AspService` with your screening rule. Call `refresh()` and then `publish()` on new deposits.
+  `refresh()` reports a change against its *local* state, so a freshly started service should
+  check `AssociationSetRegistry.isValidRoot(root)` before publishing (`syncAssociationSet` in
+  `client/scripts/testnet-env.ts`). Wallets need a refreshed `AspService`: without it they
+  refuse to spend ("deposit label is not in the association set").
+- **RPC.** `https://sepolia.base.org` caps `eth_getLogs` at 200 blocks and rate-limits (HTTP 429)
+  a full sync; its load-balanced nodes can also lag a block behind a receipt. The syncs split
+  log ranges to whatever the RPC accepts (`client/src/logs.ts`), but use a provider that allows
+  wide ranges: `https://base-sepolia-rpc.publicnode.com` answered a 20k-block range (checked
+  2026-10-17).
 - **Merchant.** Add `ShieldedServerScheme` and a facilitator that supports it (see x402.md).
   For Path B, nothing changes for the merchant.
 
@@ -99,3 +108,39 @@ FORK_URL=https://sepolia.base.org USDC_ADDR=0x036CbD53842c5426634e7929541eC2318f
 
 - No mainnet deployment script variant, and no real-funds configuration.
 - No audit. Read docs/security.md §5 before letting anyone else use a deployment.
+
+## 5. Live on Base Sepolia
+
+Run from an operator key holding VERIFIER (AttestationRegistry), POSTMAN (AssociationSetRegistry)
+and GUARDIAN (VendorRegistry), funded with 0.005 ETH and 10 test USDC:
+
+```bash
+cd zk/client
+TESTNET_PRIVATE_KEY=$(cat ~/.config/grayr-zk/operator-testnet.key) npx tsx scripts/testnet.ts        # setup + smoke
+TESTNET_PRIVATE_KEY=$(cat ~/.config/grayr-zk/operator-testnet.key) npx tsx scripts/testnet-flows.ts  # escrow, batch, x402
+```
+
+Both are resumable: setup steps already done on-chain are skipped, and `ONLY=E,F` picks flows.
+The merchant is the operator's own address, so these test the machinery, not privacy.
+
+Passed on 2026-10-17 (every transaction is on sepolia.basescan.org; receipts in
+`benchmarks/results/base-sepolia-2026-10-17.json`):
+
+| flow | result |
+|---|---|
+| merchant registered, attested level 3, category set, VendorTree leaf | ✓ |
+| deposits, association-set root, agent budget note | ✓ |
+| refundable payment through a relayer, merchant refunds 0.40 privately | ✓ balance 2.00 → 1.40 |
+| agent payment under its policy (verified vendor, caps, budget in-proof) | ✓ |
+| escrow released by the payer's secret, submitted from another address | ✓ |
+| escrow claimed with a partial refund; claim before `claimableAt` refused | ✓ |
+| escrow expired back to the payer; claim after `expiresAt` refused | ✓ |
+| plain + agent payment from two payers in one batched transaction | ✓ |
+| x402 Path A over HTTP, refundable, refunded by request id | ✓ only the fee is gone |
+| x402 Path B: stock `@x402/evm` exact facilitator settles real Circle USDC via the pool's EIP-1271 signature | ✓ |
+
+Live gas matched anvil within 2% (pay 1.53M, policy pay 1.55M, refund 0.68M, escrow release
+81k). Base Sepolia charged 0.006 gwei for L2 gas, so a proof-carrying payment cost ~0.0000092
+ETH. Its **L1 data footprint is ~114.6k L1 gas** (the ~8 KB proof), which on Sepolia cost
+3×10⁸ wei. Sepolia's L1 blob price isn't representative of mainnet: price mainnet from
+`l1GasUsed` and the mainnet blob fee at the time.

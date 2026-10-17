@@ -60,6 +60,31 @@ Native CLI time includes process start and loading the CRS each run; bb.js amort
 | ragequit | 850,533 |
 | batch of 1 / 2 / 4 / 8 payments, per payment | 1,479,025 / 1,188,172 / 1,048,677 / 981,014 |
 
+### Live on Base Sepolia (2026-10-17, real receipts)
+
+`client/scripts/testnet*.ts` against the deployed stack; raw rows in
+`results/base-sepolia-2026-10-17.json`. L1 gas is the OP-stack receipt's `l1GasUsed`: the
+data-availability footprint, which is what carries over to mainnet. Sepolia's L1 fee itself
+(~3×10⁸ wei per payment) doesn't.
+
+| operation | L2 gas | L1 gas (DA) |
+|---|---|---|
+| deposit (first / later) | 1,092,228 / 692,890 | 4,618 |
+| initBudget | 1,365,947 | 97,021 |
+| pay, refundable | 1,525,456 | 113,912 |
+| pay, escrow | 1,537,180–1,543,158 | 114,648 |
+| payWithPolicy (agent, refundable slot) | 1,545,430 | 117,124 |
+| x402 shielded payment (Path A, via facilitator) | 1,525,831 | 114,688 |
+| authorizeTransfer (Path B) + stock USDC `transferWithAuthorization` | 1,590,017 + 85,823 | 114,742 + 2,945 |
+| merchant refund | 681,926 | 2,838 |
+| escrow release / claim with refund / expire | 80,827 / 678,098 / 660,330 | 4,310 / 3,534 / 3,414 |
+| batch of 2 (refundable + policy), total | 2,486,771 | 230,500 |
+| association-set root | 64,536–95,936 | ~1,700 |
+
+The first deposit into the pool costs more, most likely because it writes storage slots that are
+still zero; later deposits only update them. A batch of 2 saves ~0.58M L2 gas over two separate payments but no L1 gas: each proof
+is still posted in full, which only recursive aggregation would remove.
+
 ### Where the gas goes (pay merchant, 1.53M)
 
 | component | gas | source |
