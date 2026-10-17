@@ -19,6 +19,9 @@ Base:
 
 Research code. **Live on Base Sepolia (testnet). Not on mainnet, no real funds. Not audited.**
 
+**Live demo: [mainly-belongs-poem-karl.trycloudflare.com](https://mainly-belongs-poem-karl.trycloudflare.com)**. Press the button and an AI agent privately
+pays a real x402 API on Base Sepolia, step by step, with Basescan links.
+
 ## Status
 
 | milestone | status | proof it works |
@@ -64,6 +67,8 @@ TESTNET_PRIVATE_KEY=... npx tsx scripts/testnet-flows.ts  # escrow x3, batching,
 ```
 
 ### Public demo
+
+Running at **https://mainly-belongs-poem-karl.trycloudflare.com**.
 
 `client/scripts/demo-server.ts` serves a one-page demo (`client/demo/index.html`): a visitor
 presses a button, and an AI agent privately pays a real x402 API on Base Sepolia. Every step
