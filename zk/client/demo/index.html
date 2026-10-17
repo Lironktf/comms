@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Private Agent Payments</title>
+<meta name="description" content="Live demo on Base Sepolia: an AI agent pays an x402 API from a shielded pool. The merchant is paid; nobody can see which agent paid.">
+<style>
+  :root {
+    --bg: #f7f7f5; --card: #ffffff; --ink: #16181d; --muted: #5d6470; --line: #e3e4e8;
+    --accent: #0052ff; --accent-ink: #ffffff; --ok: #12805c; --warn: #a15c00; --err: #c4302b;
+    --code: #f0f1f4; --hidden: #f3f0ff; --hidden-ink: #4b3aa8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e1014; --card: #161a21; --ink: #e9ebef; --muted: #9aa3b2; --line: #272c36;
+      --accent: #4d83ff; --accent-ink: #ffffff; --ok: #3ccf91; --warn: #f0a640; --err: #ff6b63;
+      --code: #1d222b; --hidden: #1f1a36; --hidden-ink: #b9adff;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1014; --card: #161a21; --ink: #e9ebef; --muted: #9aa3b2; --line: #272c36;
+    --accent: #4d83ff; --accent-ink: #ffffff; --ok: #3ccf91; --warn: #f0a640; --err: #ff6b63;
+    --code: #1d222b; --hidden: #1f1a36; --hidden-ink: #b9adff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 40px 16px 64px; }
+  h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.15; margin: 12px 0 12px; letter-spacing: -0.02em; }
+  h2 { font-size: 20px; margin: 40px 0 12px; }
+  p { margin: 0 0 12px; }
+  .muted { color: var(--muted); }
+  .badge { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--ok); background: var(--card); border: 1px solid var(--line); padding: 4px 10px; border-radius: 999px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .lede { font-size: 18px; color: var(--muted); max-width: 680px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 24px 0 16px; }
+  button { font: inherit; font-weight: 600; border-radius: 10px; padding: 12px 18px; cursor: pointer; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button:disabled { opacity: .55; cursor: not-allowed; }
+  .steps { list-style: none; margin: 0; padding: 0; }
+  .steps li { display: grid; grid-template-columns: 22px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .steps li:last-child { border-bottom: 0; }
+  .icon { width: 18px; height: 18px; margin-top: 3px; border-radius: 50%; border: 2px solid var(--line); }
+  .icon.ok { background: var(--ok); border-color: var(--ok); }
+  .icon.err { background: var(--err); border-color: var(--err); }
+  .icon.info { background: var(--warn); border-color: var(--warn); }
+  .icon.run { border-color: var(--accent); border-top-color: transparent; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .icon.run { animation: none; } }
+  .title { font-weight: 600; }
+  .detail { color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+  .ms { color: var(--muted); font-weight: 400; font-size: 14px; }
+  a { color: var(--accent); }
+  code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+  pre { background: var(--code); padding: 12px; border-radius: 10px; overflow-x: auto; margin: 8px 0 0; }
+  code { background: var(--code); padding: 1px 5px; border-radius: 5px; }
+  .empty { color: var(--muted); font-size: 14px; }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 640px) { .split { grid-template-columns: 1fr; } }
+  .split h3 { margin: 0 0 8px; font-size: 15px; }
+  .split ul { margin: 0; padding-left: 18px; font-size: 14px; }
+  .split li { margin: 4px 0; overflow-wrap: anywhere; }
+  .private { background: var(--hidden); border-color: transparent; }
+  .private h3 { color: var(--hidden-ink); }
+  ol.how { padding-left: 20px; }
+  ol.how li { margin: 8px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  td { padding: 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  td:first-child { color: var(--muted); padding-right: 16px; white-space: nowrap; }
+  td.mono { overflow-wrap: anywhere; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+  @media (max-width: 640px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .stat b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 13px; color: var(--muted); }
+  footer { margin-top: 48px; font-size: 14px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <span class="badge"><span class="dot"></span>Live on Base Sepolia</span>
+  <h1>An AI agent pays an API. Nobody can tell which agent.</h1>
+  <p class="lede">The agent pays a real <a href="https://x402.org">x402</a> API from a shielded pool, using a zero-knowledge proof. The merchant gets USDC. Base's public ledger shows the pool paying the merchant, but not who paid, their balance or their history. The proof also enforces the agent's spending policy.</p>
+
+  <div class="controls">
+    <button class="primary" id="run-agent">Run as an AI agent with a spending policy</button>
+    <button id="run-wallet">Run as a plain private wallet</button>
+  </div>
+  <p class="muted" style="font-size:14px">Each run makes about 2 real testnet transactions and takes 20 to 30 seconds. The merchant refunds every payment, so the demo stays free.</p>
+
+  <div class="card">
+    <ul class="steps" id="steps"><li><span></span><span class="empty">Press a button to start a payment. Each step shows up here as it happens.</span></li></ul>
+  </div>
+
+  <h2>What the chain shows, and what it doesn't</h2>
+  <div class="split">
+    <div class="card">
+      <h3>Public on Basescan</h3>
+      <ul id="public"><li class="empty">After a run: the transaction, the sender and the USDC transfer.</li></ul>
+    </div>
+    <div class="card private">
+      <h3>Private, never on chain</h3>
+      <ul>
+        <li>Which agent or person paid</li>
+        <li>Which deposit funded it, and the payer's balance</li>
+        <li>The agent's policy: caps, allowed categories, remaining budget</li>
+        <li>Any link between this payment and the payer's other payments</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>How it works</h2>
+  <ol class="how">
+    <li><b>The agent calls the API</b> and gets <code>402 Payment Required</code> back: price, merchant address and the payment scheme.</li>
+    <li><b>It builds a zero-knowledge proof</b> (Noir, UltraHonk) that it owns some unspent note in the pool, from a deposit that passed compliance screening, and that this payment fits its policy: a Grayr-verified merchant, an allowed category, a per-payment cap and its daily budget. The proof doesn't say which note is the agent's.</li>
+    <li><b>The facilitator checks the proof</b> by simulating the pool call. The amount, merchant and request id are fixed inside the proof, so the facilitator can't redirect the payment.</li>
+    <li><b>The pool contract verifies the proof on chain</b>, marks the note spent and pays the merchant. The relayer submits the transaction and pays the gas, so the payer's address never appears.</li>
+    <li><b>Refunds stay private too.</b> The merchant refunds by request id. The money comes back as a new note only the payer can open.</li>
+  </ol>
+  <p class="muted" style="font-size:14px">Try the API yourself: <code id="curl">curl -i /api/weather</code> returns a real 402 with the payment terms.</p>
+
+  <h2>Contracts</h2>
+  <div class="stats" id="stats"></div>
+  <div class="card">
+    <table id="contracts"><tr><td>loading…</td><td></td></tr></table>
+  </div>
+
+  <footer>
+    <p><b>About this demo.</b> It runs on Base Sepolia, a testnet, with test USDC. The contracts are unaudited research code. To keep it one click, the demo agent's keys live on the demo server, so the proof is built there rather than in your browser; in real use the agent builds it on its own machine. The merchant here is also the demo operator. With only a few deposits in the pool, the privacy is weak: it gets stronger as more people use the pool.</p>
+  </footer>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const scan = (kind, v) => `https://sepolia.basescan.org/${kind}/${v}`;
+const short = (h) => h ? `${h.slice(0, 10)}…${h.slice(-6)}` : "";
+const txLink = (h) => `<a href="${scan("tx", h)}" target="_blank" rel="noopener">${short(h)}</a>`;
+const addrLink = (a) => `<a class="mono" href="${scan("address", a)}" target="_blank" rel="noopener">${short(a)}</a>`;
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+let info = {};
+$("#curl").textContent = `curl -i ${location.origin}/api/weather`;
+
+const steps = $("#steps");
+const rows = {};
+function row(key, state, title, detail = "") {
+  let li = rows[key];
+  if (!li) { li = document.createElement("li"); steps.appendChild(li); rows[key] = li; }
+  li.innerHTML = `<span class="icon ${state}"></span><div><div class="title">${title}</div>${detail ? `<div class="detail">${detail}</div>` : ""}</div>`;
+}
+const ms = (x) => x != null ? ` <span class="ms">${x < 1000 ? x + " ms" : (x / 1000).toFixed(1) + " s"}</span>` : "";
+
+function setBusy(b) { $("#run-agent").disabled = b; $("#run-wallet").disabled = b; }
+
+function run(as) {
+  setBusy(true);
+  steps.innerHTML = ""; for (const k in rows) delete rows[k];
+  $("#public").innerHTML = `<li class="empty">Waiting for the transaction…</li>`;
+  let n = 0, payer = as;
+  const es = new EventSource(`/demo/run?as=${as}`);
+  const finish = () => { es.close(); setBusy(false); loadStats(); };
+  es.onmessage = (m) => {
+    const e = JSON.parse(m.data);
+    switch (e.step) {
+      case "queued": row("queued", "run", "Waiting in line", `${e.ahead} run(s) ahead of you`); break;
+      case "info": row("info" + n++, "info", "Note", esc(e.detail) + (e.tx ? ` · ${txLink(e.tx)}` : "")); break;
+      case "start":
+        payer = e.payer;
+        if (rows.queued) rows.queued.remove();
+        row("start", "ok", `${payer === "agent" ? "The AI agent" : "The wallet"} calls <code>GET /api/weather</code>`);
+        break;
+      case "402": {
+        const a = e.accepts || {};
+        const price = a.amount ? (Number(a.amount) / 1e6).toFixed(2) + " USDC" : "";
+        row("402", "ok", "The merchant answers <code>402 Payment Required</code>" + ms(e.ms),
+          `price ${price} · scheme <code>${esc(a.scheme || "shielded")}</code> · pay to ${a.payTo ? addrLink(a.payTo) : ""} · modes: ${esc((a.extra?.paymentModes || []).join(", "))}`);
+        break;
+      }
+      case "proving":
+        row("proof", "run", `Building a zero-knowledge proof <span class="ms">(${e.circuit})</span>`,
+          e.circuit === "policy_pay" ? "Proving: I own an unspent note from an approved deposit, the merchant is Grayr-verified (level ≥ 2, category “data”), 0.10 ≤ my 1.00 per-payment cap, and it fits my daily budget." : "Proving: I own an unspent note from an approved deposit, worth at least the price.");
+        break;
+      case "proof":
+        row("proof", "ok", `Proof built and uploaded to the facilitator` + ms(e.ms),
+          `circuit <code>${e.circuit}</code>${e.bytes ? ` · ${(e.bytes / 1024).toFixed(1)} KB bundle` : ""} · sent as a short reference: <code>${esc(short(e.ref || ""))}</code>`);
+        break;
+      case "verify":
+        row("verify", e.ok ? "ok" : "err", e.ok ? "The facilitator verified it" + ms(e.ms) : "The facilitator rejected it",
+          e.ok ? "It checked the terms (amount, merchant, request id), then simulated the pool call, which runs the on-chain proof verifier." : esc(e.detail || ""));
+        break;
+      case "settling": row("settle", "run", "The relayer submits it to Base Sepolia…"); break;
+      case "settle":
+        row("settle", e.ok ? "ok" : "err", e.ok ? "Settled on chain: the pool verified the proof and paid the merchant" + ms(e.ms) : "Settlement failed",
+          e.ok ? txLink(e.tx) : esc(e.detail || ""));
+        break;
+      case "response": if (e.paid) row("response", e.status === 200 ? "ok" : "err", `The API answers ${e.status}` + ms(e.ms)); break;
+      case "data": row("data", "ok", "The agent gets its data", `<pre>${esc(JSON.stringify(e.body, null, 2))}</pre>`); break;
+      case "chain": {
+        const t = (e.transfers || []).map((x) => `<li>USDC transfer: ${addrLink(x.from)} ${x.from.toLowerCase() === (info.pool || "").toLowerCase() ? "(the pool)" : ""} → ${addrLink(x.to)} ${x.to.toLowerCase() === (info.merchant || "").toLowerCase() ? "(the merchant)" : ""}: <b>${x.usdc.toFixed(2)} USDC</b></li>`).join("");
+        $("#public").innerHTML = `<li>Transaction ${txLink(e.tx)} in block ${e.block}</li>
+          <li>Sent by ${addrLink(e.from)}: the relayer, not the payer</li>
+          <li>Called ${addrLink(e.to)}: the shielded pool</li>${t}
+          <li>A nullifier (a one-time “spent” tag) and new encrypted notes: random-looking numbers</li>
+          <li>${e.gasUsed.toLocaleString()} gas</li>`;
+        break;
+      }
+      case "refund": row("refund", "ok", "The merchant refunds by request id (this keeps the demo free)", `${txLink(e.tx)} · the money comes back as a new private note only the payer can open`); break;
+      case "done": row("done", "ok", "Done" + ms(e.ms)); finish(); break;
+      case "error": row("error", "err", "Stopped", esc(e.detail || "")); finish(); break;
+    }
+  };
+  es.onerror = () => { if (!rows.done && !rows.error) row("error", "err", "Connection lost", "Refresh and try again."); finish(); };
+}
+$("#run-agent").onclick = () => run("agent");
+$("#run-wallet").onclick = () => run("wallet");
+
+async function loadStats() {
+  try {
+    info = await (await fetch("/demo/stats")).json();
+    const s = [["deposits", info.deposits], ["notes in the tree", info.notes], ["payments recorded", info.payments], ["demo runs today", `${info.runsToday} / ${info.maxPerDay}`]];
+    $("#stats").innerHTML = s.map(([k, v]) => `<div class="stat"><b>${v}</b><span>${k}</span></div>`).join("");
+    const c = [["ShieldedPool", info.pool], ["PaymentBook (refunds, escrow)", info.paymentBook], ["VendorTree (verified merchants)", info.vendorTree], ["AssociationSetRegistry (compliance)", info.associationSet], ["Merchant (Grayr-verified)", info.merchant], ["USDC (Circle, testnet)", info.usdc]];
+    $("#contracts").innerHTML = c.map(([k, v]) => `<tr><td>${k}</td><td class="mono"><a href="${scan("address", v)}" target="_blank" rel="noopener">${v}</a></td></tr>`).join("");
+  } catch { /* stats are optional */ }
+}
+loadStats();
+</script>
+</body>
+</html>

@@ -63,6 +63,28 @@ TESTNET_PRIVATE_KEY=... npx tsx scripts/testnet.ts        # merchant, deposits, 
 TESTNET_PRIVATE_KEY=... npx tsx scripts/testnet-flows.ts  # escrow x3, batching, x402 Path A and Path B over HTTP
 ```
 
+### Public demo
+
+`client/scripts/demo-server.ts` serves a one-page demo (`client/demo/index.html`): a visitor
+presses a button, and an AI agent privately pays a real x402 API on Base Sepolia. Every step
+streams to the page with Basescan links, along with what the chain shows and what stays private.
+
+```bash
+cd zk/client
+TESTNET_PRIVATE_KEY=$(cat ~/.config/grayr-zk/operator-testnet.key) DEMO_PUBLIC_URL=https://<public host> npx tsx scripts/demo-server.ts
+cloudflared tunnel --no-autoupdate --url http://127.0.0.1:8787     # prints the https://….trycloudflare.com URL
+```
+
+- **Where it listens.** The server binds to 127.0.0.1 only. Public routes are the page,
+  `/demo/*`, the paid `/api/weather` and bundle upload; the relayer's `/v1/relay` is never
+  exposed.
+- **Limits.** One run at a time, 150 runs a day, one per IP every 20 s, and it stops if the
+  operator's gas drops below 0.0005 ETH.
+- **Cost.** Every payment is refundable and refunded right after, so a run costs only gas,
+  ~0.000013 ETH.
+- **Where the proof is built.** The demo agent's keys live on the server, so the proof is built
+  there, not in the visitor's browser. The page says so.
+
 What hasn't been done yet:
 - **Off-chain parts ran on one server.** The merchant, facilitator and relayer ran as local
   processes (127.0.0.1) pointed at Sepolia, and the merchant was the test key's own address.
