@@ -26,12 +26,17 @@
 //!      with the same owner, policy and label. There is NO second output, so the
 //!      agent cannot privately move policy funds anywhere but a verified vendor.
 //!   8. label L is in the association set `asp_root`.
+//!   9. `refund_core` is the core of a note for the SAME agent: owner, policy P and label L.
+//!      The contract materializes H3(refund, token, refund_core) only if the merchant refunds
+//!      or an escrow returns funds, so refunded money stays under the agent's policy.
 //!
 //! `now` is checked by the contract against block.timestamp (bounded staleness).
-//! `context` binds chainId, pool, fee recipient, x402 request id, deadline.
+//! `context` binds chainId, pool, fee recipient, x402 request id, deadline and the payment
+//! options (direct / refundable / escrow terms, refund ciphertext).
 use shielded::{
-    budget_commitment, merkle_root, note_commitment, nullifier, nullifier_key, owner_pk,
-    vendor_leaf, Policy, ASP_TREE_DEPTH, NOTE_TREE_DEPTH, VENDOR_TREE_DEPTH,
+    budget_commitment, merkle_root, note_commitment, note_core, note_inner, nullifier,
+    nullifier_key, owner_pk, vendor_leaf, Policy, ASP_TREE_DEPTH, NOTE_TREE_DEPTH,
+    VENDOR_TREE_DEPTH,
 };
 
 fn main(
@@ -44,6 +49,7 @@ fn main(
     budget_nullifier: pub Field,
     change_commitment: pub Field,
     new_budget_commitment: pub Field,
+    refund_core: pub Field,
     amount: pub u128,
     fee: pub u128,
     token: pub Field,
@@ -72,6 +78,7 @@ fn main(
     vendor_path: [Field; VENDOR_TREE_DEPTH],
     change_blinding: Field,
     new_budget_blinding: Field,
+    refund_blinding: Field,
 ) {
     let _ = context; // bound as a public input only
 
@@ -159,6 +166,11 @@ fn main(
     change.assert_max_bit_size::<128>();
     let ccm = note_commitment(change, token, label, owner, change_blinding, policy);
     assert(ccm == change_commitment, "bad change");
+
+    // (9) refund slot: back to this agent, same policy and lineage. Without this an agent
+    // could collude with a merchant to have "refunds" land in an unrestricted note.
+    let rcore = note_core(label, note_inner(owner, refund_blinding, policy));
+    assert(rcore == refund_core, "bad refund core");
 
     // (8) association set
     assert(merkle_root(label, asp_index, asp_path) == asp_root, "label not in association set");
