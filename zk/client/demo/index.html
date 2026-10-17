@@ -4,276 +4,319 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Private Agent Payments</title>
-<meta name="description" content="Live demo on Base Sepolia: an AI agent pays an x402 API from a shielded pool. The merchant is paid; nobody can see which agent paid.">
+<meta name="description" content="Live on Base Sepolia: an AI agent pays an x402 API from a shielded pool. The merchant is paid; the chain can't tell which agent paid.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #f7f7f5; --card: #ffffff; --ink: #16181d; --muted: #5d6470; --line: #e3e4e8;
-    --accent: #0052ff; --accent-ink: #ffffff; --ok: #12805c; --warn: #a15c00; --err: #c4302b;
-    --code: #f0f1f4; --hidden: #f3f0ff; --hidden-ink: #4b3aa8;
+    --bg: #fafaf9; --ink: #111111; --dim: #8a8a86; --faint: #d9d9d5; --field: #cfcfca; --field-hot: #111111;
+    --ok: #1a7f4b; --err: #c0392b; --sel: #111111; --sel-ink: #fafaf9;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #0e1014; --card: #161a21; --ink: #e9ebef; --muted: #9aa3b2; --line: #272c36;
-      --accent: #4d83ff; --accent-ink: #ffffff; --ok: #3ccf91; --warn: #f0a640; --err: #ff6b63;
-      --code: #1d222b; --hidden: #1f1a36; --hidden-ink: #b9adff;
+      --bg: #0b0b0b; --ink: #ededeb; --dim: #7a7a76; --faint: #262624; --field: #2a2a28; --field-hot: #ededeb;
+      --ok: #4ade80; --err: #f87171; --sel: #ededeb; --sel-ink: #0b0b0b;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #0e1014; --card: #161a21; --ink: #e9ebef; --muted: #9aa3b2; --line: #272c36;
-    --accent: #4d83ff; --accent-ink: #ffffff; --ok: #3ccf91; --warn: #f0a640; --err: #ff6b63;
-    --code: #1d222b; --hidden: #1f1a36; --hidden-ink: #b9adff;
+    --bg: #0b0b0b; --ink: #ededeb; --dim: #7a7a76; --faint: #262624; --field: #2a2a28; --field-hot: #ededeb;
+    --ok: #4ade80; --err: #f87171; --sel: #ededeb; --sel-ink: #0b0b0b;
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  main { max-width: 860px; margin: 0 auto; padding: 40px 16px 64px; }
-  h1 { font-size: clamp(28px, 5vw, 40px); line-height: 1.15; margin: 12px 0 12px; letter-spacing: -0.02em; }
-  h2 { font-size: 20px; margin: 40px 0 12px; }
-  p { margin: 0 0 12px; }
-  .muted { color: var(--muted); }
-  .badge { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--ok); background: var(--card); border: 1px solid var(--line); padding: 4px 10px; border-radius: 999px; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
-  .lede { font-size: 18px; color: var(--muted); max-width: 680px; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
-  .controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 24px 0 16px; }
-  button { font: inherit; font-weight: 600; border-radius: 10px; padding: 12px 18px; cursor: pointer; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
-  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-  button:disabled { opacity: .55; cursor: not-allowed; }
-  .steps { list-style: none; margin: 0; padding: 0; }
-  .steps li { display: grid; grid-template-columns: 22px 1fr; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
-  .steps li:last-child { border-bottom: 0; }
-  .icon { width: 18px; height: 18px; margin-top: 3px; border-radius: 50%; border: 2px solid var(--line); }
-  .icon.ok { background: var(--ok); border-color: var(--ok); }
-  .icon.err { background: var(--err); border-color: var(--err); }
-  .icon.info { background: var(--warn); border-color: var(--warn); }
-  .icon.run { border-color: var(--accent); border-top-color: transparent; animation: spin .8s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  @media (prefers-reduced-motion: reduce) { .icon.run { animation: none; } }
-  .title { font-weight: 600; }
-  .detail { color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
-  .ms { color: var(--muted); font-weight: 400; font-size: 14px; }
-  a { color: var(--accent); }
-  code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
-  pre { background: var(--code); padding: 12px; border-radius: 10px; overflow-x: auto; margin: 8px 0 0; }
-  code { background: var(--code); padding: 1px 5px; border-radius: 5px; }
-  .empty { color: var(--muted); font-size: 14px; }
-  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media (max-width: 640px) { .split { grid-template-columns: 1fr; } }
-  .split h3 { margin: 0 0 8px; font-size: 15px; }
-  .split ul { margin: 0; padding-left: 18px; font-size: 14px; }
-  .split li { margin: 4px 0; overflow-wrap: anywhere; }
-  .private { background: var(--hidden); border-color: transparent; }
-  .private h3 { color: var(--hidden-ink); }
-  ol.how { padding-left: 20px; }
-  ol.how li { margin: 8px 0; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  td { padding: 8px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
-  td:first-child { color: var(--muted); padding-right: 16px; white-space: nowrap; }
-  td.mono { overflow-wrap: anywhere; }
-  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
-  @media (max-width: 640px) { .stats { grid-template-columns: repeat(2, 1fr); } }
-  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
-  .stat b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
-  .stat span { font-size: 13px; color: var(--muted); }
-  .flow { display: grid; grid-template-columns: 1fr 1.2fr 1fr 1.2fr 1fr; align-items: center; margin: 28px 0 8px; }
-  .node { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 10px; text-align: center; transition: border-color .3s, box-shadow .3s; }
-  .node b { display: block; font-size: 15px; }
-  .node span { font-size: 12px; color: var(--muted); }
-  .node.lit { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
-  .link { position: relative; height: 2px; margin: 0 6px; }
-  .link::before { content: ""; position: absolute; inset: 0; border-top: 2px dashed var(--line); }
-  .link.paid::before { border-top: 2px solid var(--line); transition: border-color .3s; }
-  .link.lit.paid::before { border-color: var(--ok); }
-  .link label { position: absolute; left: 0; right: 0; top: -22px; text-align: center; font-size: 12px; color: var(--muted); }
-  .link.hidden label { color: var(--hidden-ink); }
-  .link.hidden::after { content: "no on-chain link"; position: absolute; left: 0; right: 0; top: 8px; text-align: center; font-size: 11px; color: var(--hidden-ink); }
-  @media (max-width: 640px) {
-    .flow { grid-template-columns: 1fr; gap: 18px; margin: 20px 0 4px; }
-    .node { padding: 10px; }
-    .link { height: 26px; width: 2px; margin: 0 auto; }
-    .link::before { border-top: 0; border-left: 2px dashed var(--line); }
-    .link.paid::before { border-top: 0; border-left: 2px solid var(--line); }
-    .link.lit.paid::before { border-left-color: var(--ok); }
-    .link label { top: 4px; left: 14px; right: auto; width: 160px; text-align: left; }
-    .link.hidden::after { top: 4px; left: auto; right: 14px; width: 120px; text-align: right; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body { font: 15px/1.6 Inter, ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  ::selection { background: var(--sel); color: var(--sel-ink); }
+  canvas#field { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 0; }
+  main {
+    position: relative; z-index: 1; max-width: 712px; margin: 0 auto; padding: 56px 56px 72px;
+    /* the field stays around the edges; the text column sits on a feathered, nearly solid backdrop */
+    --veil: color-mix(in srgb, var(--bg) 94%, transparent);
+    background: linear-gradient(to right, transparent, var(--veil) 56px, var(--veil) calc(100% - 56px), transparent);
   }
-  .icon.todo { border-style: dashed; }
-  li.todo .title { color: var(--muted); font-weight: 500; }
-  footer { margin-top: 48px; font-size: 14px; color: var(--muted); }
+  @media (max-width: 560px) { main { padding: 40px 16px 56px; --veil: color-mix(in srgb, var(--bg) 88%, transparent); background: var(--veil); } }
+  .mono, code, .log { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; }
+  header { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: var(--dim); }
+  header .live::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); margin-right: 8px; vertical-align: 2px; }
+  h1 { font-size: clamp(30px, 6vw, 44px); line-height: 1.08; letter-spacing: -0.03em; font-weight: 600; margin: 72px 0 16px; }
+  .sub { color: var(--dim); font-size: 17px; margin: 0 0 36px; max-width: 520px; }
+  .row { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+  button.run {
+    font: 500 15px/1 Inter, sans-serif; color: var(--sel-ink); background: var(--sel); border: 0;
+    padding: 14px 22px; border-radius: 999px; cursor: pointer; transition: transform .15s ease, opacity .15s;
+  }
+  button.run:hover { transform: translateY(-1px); }
+  button.run:active { transform: translateY(0); }
+  button.run:disabled { opacity: .4; cursor: default; transform: none; }
+  .mode { font-size: 13px; color: var(--dim); }
+  .mode button { font: inherit; background: none; border: 0; padding: 2px 0; margin-left: 10px; color: var(--dim); cursor: pointer; border-bottom: 1px solid transparent; }
+  .mode button[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+  .log { margin: 40px 0 0; font-size: 13px; line-height: 1.9; min-height: 220px; }
+  .line { display: grid; grid-template-columns: 44px 16px 1fr auto; gap: 8px; align-items: baseline; animation: in .25s ease both; }
+  @keyframes in { from { opacity: 0; transform: translateY(3px); } }
+  @media (prefers-reduced-motion: reduce) { .line { animation: none; } }
+  .t, .meta { color: var(--dim); }
+  .sym { color: var(--dim); }
+  .ok .sym { color: var(--ok); }
+  .err .sym, .err .msg { color: var(--err); }
+  .pending .msg { color: var(--dim); }
+  .pending .sym::after { content: "·"; animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .msg { overflow-wrap: anywhere; }
+  .sub-line { grid-column: 3 / 5; color: var(--dim); font-size: 12px; line-height: 1.6; margin: -4px 0 6px; }
+  .idle { color: var(--dim); }
+  a { color: inherit; text-decoration: underline; text-decoration-color: var(--faint); text-underline-offset: 3px; }
+  a:hover { text-decoration-color: currentColor; }
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 28px; font-size: 13px; }
+  .split h3 { font: 500 12px/1 "JetBrains Mono", monospace; color: var(--dim); margin: 0 0 10px; letter-spacing: .02em; }
+  .split ul { list-style: none; margin: 0; padding: 0; }
+  .split li { padding: 3px 0; overflow-wrap: anywhere; }
+  .split .hidden li { color: var(--dim); }
+  .split .hidden li::before { content: "— "; }
+  @media (max-width: 560px) { .split { grid-template-columns: 1fr; } .line { grid-template-columns: 38px 14px 1fr; } .line .meta { grid-column: 3; } .sub-line { grid-column: 3; } }
+  details { margin-top: 48px; border-top: 1px solid var(--faint); padding-top: 16px; font-size: 14px; }
+  details + details { margin-top: 0; }
+  summary { cursor: pointer; list-style: none; color: var(--ink); font-weight: 500; padding: 4px 0; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "+"; float: right; color: var(--dim); font-family: "JetBrains Mono", monospace; }
+  details[open] summary::after { content: "−"; }
+  details p, details ol { color: var(--dim); margin: 10px 0; }
+  details ol { padding-left: 18px; }
+  details li { margin: 6px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 8px 0; }
+  td { padding: 6px 0; vertical-align: top; }
+  td:first-child { color: var(--dim); padding-right: 12px; white-space: nowrap; }
+  td.mono { overflow-wrap: anywhere; }
+  footer { margin-top: 48px; font-size: 12px; color: var(--dim); }
 </style>
 </head>
 <body>
+<canvas id="field" aria-hidden="true"></canvas>
 <main>
-  <span class="badge"><span class="dot"></span>Live on Base Sepolia</span>
-  <h1>An AI agent pays an API. Nobody can tell which agent.</h1>
-  <p class="lede">The agent pays a real <a href="https://x402.org">x402</a> API from a shielded pool, using a zero-knowledge proof. The merchant gets USDC. Base's public ledger shows the pool paying the merchant, but not who paid, their balance or their history. The proof also enforces the agent's spending policy.</p>
+  <header>
+    <span class="mono">grayr / private payments</span>
+    <span class="live mono">base sepolia</span>
+  </header>
 
-  <div class="flow" aria-hidden="true">
-    <div class="node" id="n-agent"><b>AI agent</b><span>builds the proof</span></div>
-    <div class="link hidden" id="l-proof"><label>proof only</label></div>
-    <div class="node" id="n-pool"><b>Shielded pool</b><span>verifies, pays</span></div>
-    <div class="link paid" id="l-pay"><label>USDC</label></div>
-    <div class="node" id="n-merchant"><b>x402 merchant</b><span>Grayr-verified</span></div>
+  <h1>Agents pay.<br>Nobody sees who.</h1>
+  <p class="sub">An AI agent pays a live <a href="https://x402.org">x402</a> API with a zero-knowledge proof. The merchant gets USDC. The chain can't tell which agent paid.</p>
+
+  <div class="row">
+    <button class="run" id="run">Run a private payment</button>
+    <span class="mode">pay as
+      <button id="m-agent" aria-pressed="true">agent with a policy</button>
+      <button id="m-wallet" aria-pressed="false">plain wallet</button>
+    </span>
   </div>
 
-  <div class="controls">
-    <button class="primary" id="run-agent">Run as an AI agent with a spending policy</button>
-    <button id="run-wallet">Run as a plain private wallet</button>
-  </div>
-  <p class="muted" style="font-size:14px">Each run makes about 2 real testnet transactions and takes 20 to 30 seconds. The merchant refunds every payment, so the demo stays free.</p>
+  <div class="log" id="log" aria-live="polite"><div class="idle">Real testnet transactions, about 20 seconds. Every payment is refunded.</div></div>
+  <div id="after"></div>
 
-  <div class="card">
-    <ul class="steps" id="steps"></ul>
-  </div>
+  <details>
+    <summary>How it works</summary>
+    <ol>
+      <li>The agent calls the API and gets <code>402 Payment Required</code>: the price and where to pay.</li>
+      <li>It proves, without saying which, that it owns an unspent note in the pool from a deposit that passed compliance screening. In agent mode the same proof shows the payment fits its policy: a Grayr-verified merchant, an allowed category, a per-payment cap and a daily budget.</li>
+      <li>The facilitator checks the proof. The amount, merchant and request id are fixed inside it, so the payment can't be redirected.</li>
+      <li>The pool contract verifies the proof on chain and pays the merchant. A relayer sends the transaction, so the payer's address never appears.</li>
+      <li>Refunds come back as a new note only the payer can open.</li>
+    </ol>
+    <p>Try it: <code id="curl">curl -i /api/weather</code></p>
+  </details>
+  <details>
+    <summary>Contracts</summary>
+    <table id="contracts"></table>
+    <p id="stats"></p>
+  </details>
 
-  <h2>What the chain shows, and what it doesn't</h2>
-  <div class="split">
-    <div class="card">
-      <h3>Public on Basescan</h3>
-      <ul id="public"><li class="empty">After a run: the transaction, the sender and the USDC transfer.</li></ul>
-    </div>
-    <div class="card private">
-      <h3>Private, never on chain</h3>
-      <ul>
-        <li>Which agent or person paid</li>
-        <li>Which deposit funded it, and the payer's balance</li>
-        <li>The agent's policy: caps, allowed categories, remaining budget</li>
-        <li>Any link between this payment and the payer's other payments</li>
-      </ul>
-    </div>
-  </div>
-
-  <h2>How it works</h2>
-  <ol class="how">
-    <li><b>The agent calls the API</b> and gets <code>402 Payment Required</code> back: price, merchant address and the payment scheme.</li>
-    <li><b>It builds a zero-knowledge proof</b> (Noir, UltraHonk) that it owns some unspent note in the pool, from a deposit that passed compliance screening, and that this payment fits its policy: a Grayr-verified merchant, an allowed category, a per-payment cap and its daily budget. The proof doesn't say which note is the agent's.</li>
-    <li><b>The facilitator checks the proof</b> by simulating the pool call. The amount, merchant and request id are fixed inside the proof, so the facilitator can't redirect the payment.</li>
-    <li><b>The pool contract verifies the proof on chain</b>, marks the note spent and pays the merchant. The relayer submits the transaction and pays the gas, so the payer's address never appears.</li>
-    <li><b>Refunds stay private too.</b> The merchant refunds by request id. The money comes back as a new note only the payer can open.</li>
-  </ol>
-  <p class="muted" style="font-size:14px">Try the API yourself: <code id="curl">curl -i /api/weather</code> returns a real 402 with the payment terms.</p>
-
-  <h2>The pool right now</h2>
-  <div class="stats" id="stats"></div>
-  <div class="card">
-    <table id="contracts"><tr><td>loading…</td><td></td></tr></table>
-  </div>
-
-  <footer>
-    <p><b>About this demo.</b> It runs on Base Sepolia, a testnet, with test USDC. The contracts are unaudited research code. To keep it one click, the demo agent's keys live on the demo server, so the proof is built there rather than in your browser; in real use the agent builds it on its own machine. The merchant here is also the demo operator. With only a few deposits in the pool, the privacy is weak: it gets stronger as more people use the pool.</p>
-  </footer>
+  <footer>Testnet with test USDC. Unaudited research code. For one-click use, the demo agent's keys live on the server, so the proof is built there rather than in your browser. With few deposits in the pool, privacy is weak today.</footer>
 </main>
+
 <script>
+// ---------------------------------------------------------------------------------------
+// Background: a field of dots. Near the cursor they turn into slashes and lean away from it;
+// every payment step sends a ripple across the page.
+// ---------------------------------------------------------------------------------------
+(() => {
+  const cv = document.getElementById("field");
+  const ctx = cv.getContext("2d");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const CW = 16, CH = 20, R = 130;
+  let W = 0, H = 0, dpr = 1, cols = 0, rows = 0, base;
+  let mx = -1e4, my = -1e4, tx = -1e4, ty = -1e4;
+  const ripples = [];
+  const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  let C = {};
+  function resize() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = innerWidth; H = innerHeight;
+    cv.width = W * dpr; cv.height = H * dpr;
+    cols = Math.ceil(W / CW) + 1; rows = Math.ceil(H / CH) + 1;
+    C = {bg: css("--bg"), field: css("--field"), hot: css("--field-hot")};
+    base = document.createElement("canvas");
+    base.width = cv.width; base.height = cv.height;
+    const b = base.getContext("2d");
+    b.scale(dpr, dpr);
+    b.fillStyle = C.bg; b.fillRect(0, 0, W, H);
+    b.fillStyle = C.field; b.font = "13px 'JetBrains Mono', monospace"; b.textAlign = "center"; b.textBaseline = "middle";
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) b.fillText(".", c * CW + CW / 2, r * CH + CH / 2);
+    draw(performance.now());
+  }
+  function draw(now) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(base, 0, 0);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.font = "13px 'JetBrains Mono', monospace"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    for (let i = ripples.length - 1; i >= 0; i--) if (now - ripples[i].t > 1600) ripples.splice(i, 1);
+    const cells = new Map();
+    if (mx > -1e3) {
+      const c0 = Math.max(0, Math.floor((mx - R) / CW)), c1 = Math.min(cols, Math.ceil((mx + R) / CW));
+      const r0 = Math.max(0, Math.floor((my - R) / CH)), r1 = Math.min(rows, Math.ceil((my + R) / CH));
+      for (let r = r0; r < r1; r++) for (let c = c0; c < c1; c++) {
+        const x = c * CW + CW / 2, y = r * CH + CH / 2, dx = x - mx, dy = y - my, d = Math.hypot(dx, dy);
+        if (d < R) cells.set(r * cols + c, {x, y, dx, dy, d, k: 1 - d / R});
+      }
+    }
+    for (const rp of ripples) {
+      const rad = (now - rp.t) * 0.9, fade = 1 - (now - rp.t) / 1600;
+      const ca = Math.max(0, Math.floor((rp.x - rad - 30) / CW)), cb = Math.min(cols, Math.ceil((rp.x + rad + 30) / CW));
+      const ra = Math.max(0, Math.floor((rp.y - rad - 30) / CH)), rb = Math.min(rows, Math.ceil((rp.y + rad + 30) / CH));
+      for (let r = ra; r < rb; r++) for (let c = ca; c < cb; c++) {
+        const x = c * CW + CW / 2, y = r * CH + CH / 2, dx = x - rp.x, dy = y - rp.y, d = Math.hypot(dx, dy), band = Math.abs(d - rad);
+        if (band < 26) {
+          const k = (1 - band / 26) * fade * 0.8, key = r * cols + c, prev = cells.get(key);
+          if (!prev || prev.k < k) cells.set(key, {x, y, dx, dy, d, k});
+        }
+      }
+    }
+    for (const {x, y, dx, dy, d, k} of cells.values()) {
+      const push = k * 6, ox = d ? (dx / d) * push : 0, oy = d ? (dy / d) * push : 0;
+      ctx.fillStyle = C.bg; ctx.fillRect(x - CW / 2, y - CH / 2, CW, CH);
+      ctx.globalAlpha = 0.25 + 0.75 * k;
+      ctx.fillStyle = k > 0.35 ? C.hot : C.field;
+      ctx.fillText(k > 0.18 ? "/" : ".", x + ox, y + oy);
+      ctx.globalAlpha = 1;
+    }
+  }
+  function loop(now) {
+    // ease toward the pointer so the field glides instead of snapping
+    mx += (tx - mx) * 0.18; my += (ty - my) * 0.18;
+    if (Math.abs(tx - mx) < 0.3) mx = tx;
+    if (Math.abs(ty - my) < 0.3) my = ty;
+    draw(now);
+    requestAnimationFrame(loop);
+  }
+  addEventListener("pointermove", (e) => {
+    if (e.pointerType !== "mouse") return; // touch: taps ripple instead of leaving a stuck patch
+    if (mx < -1e3) { mx = e.clientX; my = e.clientY; }
+    tx = e.clientX; ty = e.clientY;
+  }, {passive: true});
+  addEventListener("pointerdown", (e) => { if (e.pointerType !== "mouse") window.ripple(e.clientX, e.clientY); }, {passive: true});
+  document.addEventListener("pointerleave", () => { tx = ty = mx = my = -1e4; });
+  addEventListener("resize", resize);
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", resize);
+  window.ripple = (x, y) => { if (!reduce) ripples.push({x: x ?? W / 2, y: y ?? H / 3, t: performance.now()}); };
+  document.fonts?.ready.then(resize);
+  resize();
+  if (!reduce) requestAnimationFrame(loop);
+})();
+
+// ---------------------------------------------------------------------------------------
+// The demo
+// ---------------------------------------------------------------------------------------
 const $ = (s) => document.querySelector(s);
 const scan = (kind, v) => `https://sepolia.basescan.org/${kind}/${v}`;
-const short = (h) => h ? `${h.slice(0, 10)}…${h.slice(-6)}` : "";
-const txLink = (h) => `<a href="${scan("tx", h)}" target="_blank" rel="noopener">${short(h)}</a>`;
-const addrLink = (a) => `<a class="mono" href="${scan("address", a)}" target="_blank" rel="noopener">${short(a)}</a>`;
+const short = (h) => (h ? `${h.slice(0, 6)}…${h.slice(-4)}` : "");
+const txl = (h) => `<a href="${scan("tx", h)}" target="_blank" rel="noopener">${short(h)} ↗</a>`;
+const addr = (a) => `<a href="${scan("address", a)}" target="_blank" rel="noopener">${short(a)}</a>`;
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
-let info = {};
+const dur = (ms) => (ms == null ? "" : ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`);
+let mode = "agent", t0 = 0;
 $("#curl").textContent = `curl -i ${location.origin}/api/weather`;
 
-const steps = $("#steps");
-const rows = {};
-const PLAN = [
-  ["start", "The agent calls the API"],
-  ["402", "The merchant answers 402 Payment Required"],
-  ["proof", "The agent builds a zero-knowledge proof"],
-  ["verify", "The facilitator verifies it"],
-  ["settle", "The pool pays the merchant on Base Sepolia"],
-  ["data", "The agent gets its data"],
-  ["refund", "The merchant refunds by request id"],
-];
-function skeleton() {
-  steps.innerHTML = ""; for (const k in rows) delete rows[k];
-  for (const [k, t] of PLAN) { row(k, "todo", t); rows[k].classList.add("todo"); }
+const log = $("#log");
+const lines = {};
+function line(key, state, sym, msg, meta = "", sub = "") {
+  let el = lines[key];
+  if (!el) { el = document.createElement("div"); log.appendChild(el); lines[key] = el; }
+  const t = ((performance.now() - t0) / 1000).toFixed(1);
+  el.className = `line ${state}`;
+  el.innerHTML = `<span class="t">${t}s</span><span class="sym">${state === "pending" ? "" : sym}</span><span class="msg">${msg}</span><span class="meta">${meta}</span>${sub ? `<span class="sub-line">${sub}</span>` : ""}`;
+  if (state !== "pending") {
+    const r = el.getBoundingClientRect();
+    window.ripple(r.left + 50, r.top + r.height / 2);
+  }
 }
-function light(ids) {
-  for (const id of ["n-agent", "n-pool", "n-merchant", "l-proof", "l-pay"]) document.getElementById(id).classList.toggle("lit", ids.includes(id));
-}
-skeleton();
-function row(key, state, title, detail = "") {
-  let li = rows[key];
-  if (!li) { li = document.createElement("li"); steps.appendChild(li); rows[key] = li; }
-  li.classList.remove("todo");
-  li.innerHTML = `<span class="icon ${state}"></span><div><div class="title">${title}</div>${detail ? `<div class="detail">${detail}</div>` : ""}</div>`;
-}
-const ms = (x) => x != null ? ` <span class="ms">${x < 1000 ? x + " ms" : (x / 1000).toFixed(1) + " s"}</span>` : "";
 
-function setBusy(b) { $("#run-agent").disabled = b; $("#run-wallet").disabled = b; }
+function setMode(m) {
+  mode = m;
+  $("#m-agent").setAttribute("aria-pressed", m === "agent");
+  $("#m-wallet").setAttribute("aria-pressed", m === "wallet");
+}
+$("#m-agent").onclick = () => setMode("agent");
+$("#m-wallet").onclick = () => setMode("wallet");
 
-function run(as) {
-  setBusy(true);
-  skeleton();
-  $("#public").innerHTML = `<li class="empty">Waiting for the transaction…</li>`;
-  let n = 0, payer = as;
-  const es = new EventSource(`/demo/run?as=${as}`);
-  const finish = () => { es.close(); setBusy(false); loadStats(); };
+$("#run").onclick = () => {
+  $("#run").disabled = true;
+  $("#run").textContent = "Running…";
+  log.innerHTML = ""; $("#after").innerHTML = "";
+  for (const k in lines) delete lines[k];
+  t0 = performance.now();
+  const es = new EventSource(`/demo/run?as=${mode}`);
+  const finish = () => { es.close(); $("#run").disabled = false; $("#run").textContent = "Run again"; loadStats(); };
+  let n = 0;
   es.onmessage = (m) => {
     const e = JSON.parse(m.data);
     switch (e.step) {
-      case "queued": row("queued", "run", "Waiting in line", `${e.ahead} run(s) ahead of you`); break;
-      case "info": row("info" + n++, "info", "Note", esc(e.detail) + (e.tx ? ` · ${txLink(e.tx)}` : "")); break;
+      case "queued": line("q", "pending", "", `waiting in line, ${e.ahead} ahead`); break;
+      case "info": line("i" + n++, "", "!", esc(e.detail), e.tx ? txl(e.tx) : ""); break;
       case "start":
-        payer = e.payer;
-        if (rows.queued) rows.queued.remove();
-        row("start", "ok", `${payer === "agent" ? "The AI agent" : "The wallet"} calls <code>GET /api/weather</code>`);
+        if (lines.q) lines.q.remove();
+        line("start", "ok", "→", "GET /api/weather", e.payer === "agent" ? "as agent" : "as wallet");
         break;
       case "402": {
         const a = e.accepts || {};
-        const price = a.amount ? (Number(a.amount) / 1e6).toFixed(2) + " USDC" : "";
-        row("402", "ok", "The merchant answers <code>402 Payment Required</code>" + ms(e.ms),
-          `price ${price} · scheme <code>${esc(a.scheme || "shielded")}</code> · pay to ${a.payTo ? addrLink(a.payTo) : ""} · modes: ${esc((a.extra?.paymentModes || []).join(", "))}`);
+        line("402", "ok", "←", `402 payment required · ${(Number(a.amount || 0) / 1e6).toFixed(2)} USDC`, dur(e.ms),
+          `pay to ${a.payTo ? addr(a.payTo) : "?"} · scheme ${esc(a.scheme || "")} · ${esc((a.extra?.paymentModes || []).join(" / "))}`);
         break;
       }
-      case "proving": light(["n-agent"]);
-        row("proof", "run", `Building a zero-knowledge proof <span class="ms">(${e.circuit})</span>`,
-          e.circuit === "policy_pay" ? "Proving: I own an unspent note from an approved deposit, the merchant is Grayr-verified (level ≥ 2, category “data”), 0.10 ≤ my 1.00 per-payment cap, and it fits my daily budget." : "Proving: I own an unspent note from an approved deposit, worth at least the price.");
-        break;
+      case "proving": line("proof", "pending", "", `building proof (${e.circuit})`); break;
       case "proof":
-        row("proof", "ok", `Proof built and uploaded to the facilitator` + ms(e.ms),
-          `circuit <code>${e.circuit}</code>${e.bytes ? ` · ${(e.bytes / 1024).toFixed(1)} KB bundle` : ""} · sent as a short reference: <code>${esc(short(e.ref || ""))}</code>`);
+        line("proof", "ok", "✓", `proof built (${e.circuit})`, dur(e.ms),
+          e.circuit === "policy_pay" ? "owns an unspent note · verified merchant, level ≥ 2 · allowed category · under the 1.00 cap · within today's budget" : "owns an unspent note from an approved deposit");
         break;
-      case "verify":
-        row("verify", e.ok ? "ok" : "err", e.ok ? "The facilitator verified it" + ms(e.ms) : "The facilitator rejected it",
-          e.ok ? "It checked the terms (amount, merchant, request id), then simulated the pool call, which runs the on-chain proof verifier." : esc(e.detail || ""));
-        break;
-      case "settling": light(["n-agent", "l-proof", "n-pool"]); row("settle", "run", "The relayer submits it to Base Sepolia…"); break;
-      case "settle": if (e.ok) light(["n-pool", "l-pay", "n-merchant"]);
-        row("settle", e.ok ? "ok" : "err", e.ok ? "Settled on chain: the pool verified the proof and paid the merchant" + ms(e.ms) : "Settlement failed",
-          e.ok ? txLink(e.tx) : esc(e.detail || ""));
-        break;
-      case "response": if (e.paid) row("response", e.status === 200 ? "ok" : "err", `The API answers ${e.status}` + ms(e.ms)); break;
-      case "data": row("data", "ok", "The agent gets its data", `<pre>${esc(JSON.stringify(e.body, null, 2))}</pre>`); break;
+      case "verify": line("verify", e.ok ? "ok" : "err", e.ok ? "✓" : "×", e.ok ? "facilitator verified it" : `rejected: ${esc(e.detail || "")}`, dur(e.ms)); break;
+      case "settling": line("settle", "pending", "", "settling on Base Sepolia"); break;
+      case "settle": line("settle", e.ok ? "ok" : "err", e.ok ? "✓" : "×", e.ok ? "pool verified the proof and paid" : `settlement failed: ${esc(e.detail || "")}`, e.ok ? txl(e.tx) : ""); break;
+      case "data": line("data", "ok", "←", `200 · ${esc(e.body.city)}, ${esc(e.body.forecast)}, ${esc(e.body.tempC)}°C`); break;
       case "chain": {
-        const t = (e.transfers || []).map((x) => `<li>USDC transfer: ${addrLink(x.from)} ${x.from.toLowerCase() === (info.pool || "").toLowerCase() ? "(the pool)" : ""} → ${addrLink(x.to)} ${x.to.toLowerCase() === (info.merchant || "").toLowerCase() ? "(the merchant)" : ""}: <b>${x.usdc.toFixed(2)} USDC</b></li>`).join("");
-        $("#public").innerHTML = `<li>Transaction ${txLink(e.tx)} in block ${e.block}</li>
-          <li>Sent by ${addrLink(e.from)}: the relayer, not the payer</li>
-          <li>Called ${addrLink(e.to)}: the shielded pool</li>${t}
-          <li>A nullifier (a one-time “spent” tag) and new encrypted notes: random-looking numbers</li>
-          <li>${e.gasUsed.toLocaleString()} gas</li>`;
+        const t = (e.transfers || [])[0];
+        $("#after").innerHTML = `<div class="split">
+          <div><h3>public on basescan</h3><ul>
+            <li>sent by ${addr(e.from)} (the relayer)</li>
+            <li>to ${addr(e.to)} (the pool)</li>
+            ${t ? `<li>${t.usdc.toFixed(2)} USDC, pool → ${addr(t.to)}</li>` : ""}
+            <li>${e.gasUsed.toLocaleString()} gas · ${txl(e.tx)}</li></ul></div>
+          <div class="hidden"><h3>never on chain</h3><ul>
+            <li>which agent paid</li><li>its balance and history</li><li>its spending policy</li><li>which deposit funded it</li></ul></div>
+        </div>`;
         break;
       }
-      case "refund": row("refund", "ok", "The merchant refunds by request id (this keeps the demo free)", `${txLink(e.tx)} · the money comes back as a new private note only the payer can open`); break;
-      case "done": row("done", "ok", "Done" + ms(e.ms)); light([]); finish(); break;
-      case "error": row("error", "err", "Stopped", esc(e.detail || "")); light([]); finish(); break;
+      case "refund": line("refund", "ok", "↺", "merchant refunded it, privately", txl(e.tx)); break;
+      case "done": line("done", "ok", "■", "done", dur(e.ms)); finish(); break;
+      case "error": line("error", "err", "×", esc(e.detail || "stopped")); finish(); break;
     }
   };
-  es.onerror = () => { if (!rows.done && !rows.error) row("error", "err", "Connection lost", "Refresh and try again."); finish(); };
-}
-$("#run-agent").onclick = () => run("agent");
-$("#run-wallet").onclick = () => run("wallet");
+  es.onerror = () => { if (!lines.done && !lines.error) line("error", "err", "×", "connection lost, try again"); finish(); };
+};
 
 async function loadStats() {
   try {
-    info = await (await fetch("/demo/stats")).json();
-    const s = [["deposits", info.deposits], ["notes in the tree", info.notes], ["payments recorded", info.payments], ["demo runs today", `${info.runsToday} / ${info.maxPerDay}`]];
-    $("#stats").innerHTML = s.map(([k, v]) => `<div class="stat"><b>${v}</b><span>${k}</span></div>`).join("");
-    const c = [["ShieldedPool", info.pool], ["PaymentBook (refunds, escrow)", info.paymentBook], ["VendorTree (verified merchants)", info.vendorTree], ["AssociationSetRegistry (compliance)", info.associationSet], ["Merchant (Grayr-verified)", info.merchant], ["USDC (Circle, testnet)", info.usdc]];
+    const info = await (await fetch("/demo/stats")).json();
+    const c = [["pool", info.pool], ["payment book", info.paymentBook], ["vendor tree", info.vendorTree], ["association set", info.associationSet], ["merchant", info.merchant], ["usdc", info.usdc]];
     $("#contracts").innerHTML = c.map(([k, v]) => `<tr><td>${k}</td><td class="mono"><a href="${scan("address", v)}" target="_blank" rel="noopener">${v}</a></td></tr>`).join("");
-  } catch { /* stats are optional */ }
+    $("#stats").textContent = `${info.deposits} deposits · ${info.notes} notes · ${info.payments} recorded payments · ${info.runsToday}/${info.maxPerDay} demo runs today`;
+  } catch { /* optional */ }
 }
 loadStats();
 </script>
