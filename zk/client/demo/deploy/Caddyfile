@@ -1,0 +1,17 @@
+# demo.grayr.xyz -> the demo server on loopback. Caddy gets and renews the Let's Encrypt
+# certificate itself (needs ports 80 and 443 reachable, and the DNS A record pointing here).
+demo.grayr.xyz {
+	reverse_proxy 127.0.0.1:8787
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+	log {
+		output file /var/log/caddy/demo.grayr.xyz.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+	}
+}

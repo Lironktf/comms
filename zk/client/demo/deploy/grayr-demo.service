@@ -1,0 +1,19 @@
+# The demo server (Base Sepolia, testnet key). Restarts on failure and at boot.
+[Unit]
+Description=Grayr private-payments demo (Base Sepolia)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/personal/grayr/zk/client
+Environment=DEMO_PUBLIC_URL=https://demo.grayr.xyz
+Environment=PATH=/home/ubuntu/.nvm/versions/node/v24.19.0/bin:/usr/local/bin:/usr/bin:/bin
+# the key is read from its mode-600 file at start; it never appears in the unit or the journal
+ExecStart=/bin/bash -c 'TESTNET_PRIVATE_KEY=$(cat /home/ubuntu/.config/grayr-zk/operator-testnet.key) exec npx tsx scripts/demo-server.ts'
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

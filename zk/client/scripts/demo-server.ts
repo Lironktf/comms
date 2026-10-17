@@ -75,7 +75,9 @@ const facilitator: FacilitatorClient = {
 const rs = new x402ResourceServer(facilitator).register(NET, new ShieldedServerScheme({usdc}));
 
 const app = express();
-app.set("trust proxy", true);
+// exactly one proxy in front (Caddy or cloudflared): take the client IP it reports, not a
+// client-supplied X-Forwarded-For, so the per-IP limit can't be dodged
+app.set("trust proxy", 1);
 app.use(
   paymentMiddleware(
     {
