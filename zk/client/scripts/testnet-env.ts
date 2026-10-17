@@ -6,7 +6,7 @@ import {existsSync, mkdirSync, readFileSync, writeFileSync} from "node:fs";
 import {homedir} from "node:os";
 import {join} from "node:path";
 import {randomBytes} from "node:crypto";
-import {createPublicClient, createWalletClient, http, type Address, type Hex, type PublicClient, type WalletClient} from "viem";
+import {createPublicClient, createWalletClient, fallback, http, type Address, type Hex, type PublicClient, type WalletClient} from "viem";
 import {nonceManager, privateKeyToAccount} from "viem/accounts";
 import {baseSepolia} from "viem/chains";
 import {AspService, blocklistRule} from "../src/asp.js";
@@ -19,7 +19,12 @@ import {type PolicyParams} from "../src/hashes.js";
 import {associationSetAbi, mockUsdcAbi} from "../src/abi.js";
 import {ZK_DIR} from "../src/devnet.js";
 
+// publicnode, then Tenderly's public gateway: the official sepolia.base.org caps eth_getLogs at
+// 200 blocks and rate-limits the syncs (429). Both answered a 30k-block getLogs on 2026-10-17;
+// publicnode also rate-limits (-32005), so the second one takes over when it does.
 export const RPC = process.env.BASE_SEPOLIA_RPC_URL ?? "https://base-sepolia-rpc.publicnode.com";
+const RPCS = [RPC, ...(process.env.BASE_SEPOLIA_RPC_URL ? [] : ["https://base-sepolia.gateway.tenderly.co"])];
+const transport = () => fallback(RPCS.map((u) => http(u, {retryCount: 4, retryDelay: 800})));
 export const U = (x: number) => BigInt(Math.round(x * 1e6));
 export const $ = (x: bigint) => `${(Number(x) / 1e6).toFixed(2)} USDC`;
 export const tx = (h: Hex) => `https://sepolia.basescan.org/tx/${h}`;
@@ -30,8 +35,8 @@ const pk = process.env.TESTNET_PRIVATE_KEY as Hex | undefined;
 if (!pk || !/^0x[0-9a-fA-F]{64}$/.test(pk)) throw new Error("set TESTNET_PRIVATE_KEY (see the header of scripts/testnet.ts)");
 // local nonce tracking: the public RPC is load-balanced and can report a stale pending nonce
 export const account = privateKeyToAccount(pk, {nonceManager});
-export const publicClient = createPublicClient({chain: baseSepolia, transport: http(RPC, {retryCount: 6}), pollingInterval: 1_000}) as PublicClient;
-export const wallet: WalletClient = createWalletClient({account, chain: baseSepolia, transport: http(RPC)});
+export const publicClient = createPublicClient({chain: baseSepolia, transport: transport(), pollingInterval: 1_000}) as PublicClient;
+export const wallet: WalletClient = createWalletClient({account, chain: baseSepolia, transport: transport()});
 if ((await publicClient.getChainId()) !== 84532) throw new Error("not Base Sepolia: refusing to run");
 // Its nodes can also lag a block behind the one that returned a receipt, so a read right after
 // a tx may not see it (seen 2026-10-17: attest right after registerVendor reverted with

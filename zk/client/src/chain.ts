@@ -2,8 +2,13 @@ import {parseAbiItem, type Address, type Hex, type PublicClient} from "viem";
 import {MerkleTree} from "./merkle.js";
 import {scanLogs} from "./logs.js";
 
-/** Blocks processed per sync step; each getLogs inside is further split to the RPC's cap (logs.ts). ASSUMPTION: bounds memory per step; any size works. */
-const SYNC_WINDOW = 2_000n;
+/**
+ * Blocks processed per sync step; each getLogs inside is further split to the RPC's cap
+ * (logs.ts). Large on purpose: publicnode and Tenderly answered a 30k-block Base Sepolia range
+ * in one call (2026-10-17), and 2,000-block steps cost ~600 requests per startup, which got the
+ * demo rate-limited. ASSUMPTION: memory per step stays small at testnet volumes.
+ */
+const SYNC_WINDOW = 100_000n;
 
 /** One leaf of the note tree as seen onchain. */
 export interface LeafRecord {

@@ -1,11 +1,11 @@
 import type {PublicClient} from "viem";
 
 /**
- * Block-range cap per eth_getLogs, learned per client. Starts at 2,000 and halves whenever the
+ * Block-range cap per eth_getLogs, learned per client. Starts at 100,000 and halves whenever the
  * RPC rejects a range. Measured: https://sepolia.base.org answers "eth_getLogs is limited to a
  * 200 range" (code -32614), 2026-10-17.
  */
-const START = 2_000n;
+const START = 100_000n;
 const learned = new WeakMap<PublicClient, bigint>();
 
 const isRangeError = (e: unknown) => {

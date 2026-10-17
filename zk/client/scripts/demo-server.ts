@@ -268,6 +268,8 @@ app.get("/demo/stats", async (_q, res) => {
 
 app.use(express.static(join(ZK_DIR, "client", "demo")));
 app.listen(PORT, "127.0.0.1", () => console.log(`demo on ${LOCAL} (public: ${PUBLIC_URL})`));
+// an RPC hiccup in a background promise shouldn't take the public demo down
+process.on("unhandledRejection", (e) => console.error("unhandled:", (e as Error)?.message ?? e));
 process.on("SIGTERM", async () => {
   await prover.destroy();
   process.exit(0);
