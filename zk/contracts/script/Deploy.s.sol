@@ -36,7 +36,11 @@ import {VerifierLinker} from "./VerifierLinker.sol";
 ///   SWAP_ROUTER                            optional: a SwapRouter02 address; omit to skip swaps
 ///   ASP_POSTMAN                            address allowed to publish association-set roots
 ///   OWNER                                  pool owner (token config only); use a Safe
+///   USDC_MAX_DEPOSIT                       optional per-deposit cap, atomic units (default 10,000 USDC;
+///                                          1 USDC on Base mainnet)
 /// and pass --rpc-url $BASE_SEPOLIA_RPC_URL with your own key. See zk/docs/deploy.md.
+/// BASE MAINNET (8453): same variables, USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913. Unaudited:
+/// keep the 1 USDC cap. See zk/docs/deploy.md §6.
 contract Deploy is Script {
     struct Deployed {
         address poseidon2;
@@ -123,8 +127,10 @@ contract Deploy is Script {
             d.weth = vm.envOr("WETH", address(0));
         }
 
-        // Deposit caps: research deployment, keep exposure small.
-        pool.configureToken(d.usdc, true, true, 10_000e6);
+        // Per-deposit cap: research deployment, keep exposure small. On Base mainnet (8453) the
+        // default is 1 USDC (ASSUMPTION: a demo needs no more; raise only after an audit).
+        uint256 usdcCap = vm.envOr("USDC_MAX_DEPOSIT", block.chainid == 8453 ? uint256(1e6) : uint256(10_000e6));
+        pool.configureToken(d.usdc, true, true, uint128(usdcCap));
         if (d.weth != address(0)) pool.configureToken(d.weth, true, false, 10e18);
         if (d.swapRouter != address(0)) {
             d.swapAdapter = address(new UniswapV3Adapter(IV3SwapRouter(d.swapRouter), d.pool));

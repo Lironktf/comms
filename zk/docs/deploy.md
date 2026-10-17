@@ -144,3 +144,48 @@ Live gas matched anvil within 2% (pay 1.53M, policy pay 1.55M, refund 0.68M, esc
 ETH. Its **L1 data footprint is ~114.6k L1 gas** (the ~8 KB proof), which on Sepolia cost
 3×10⁸ wei. Sepolia's L1 blob price isn't representative of mainnet: price mainnet from
 `l1GasUsed` and the mainnet blob fee at the time.
+
+## 6. Base mainnet (you run it; unaudited, 1 USDC deposit cap)
+
+This is a demo deployment, not a product: the code is unaudited, and the pool can't be upgraded
+or paused, so the cap is the safety. `Deploy.s.sol` defaults to a **1 USDC per-deposit cap on
+chain 8453**. Don't raise `USDC_MAX_DEPOSIT` without an audit.
+
+Rehearsed on a local fork of Base mainnet on 2026-10-17 (nothing broadcast):
+
+| deploy | L2 gas used |
+|---|---|
+| Grayr registries (2 UUPS proxies + implementations) | 6,127,808 |
+| ZK stack (Poseidon2, 4 verifiers, VendorTree, AssociationSet, ShieldedPool + PaymentBook, USDC config) | 26,387,423 |
+
+At the 0.006 gwei Base mainnet gas price read on 2026-10-17, that's ~0.0002 ETH of L2 gas. The
+L1 data fee for the 148 KB of contract code is at most 6.2×10¹¹ wei (0.0000006 ETH) per the
+GasPriceOracle's `getL1FeeUpperBound` on the same day. Fund the deployer with **0.001 ETH** to
+leave room for the post-deploy steps and price moves.
+
+```bash
+# a fresh keystore just for this; fund its address with ~0.001 ETH on Base mainnet
+cast wallet new ~/.foundry/keystores grayr-mainnet     # or: cast wallet import grayr-mainnet --interactive
+export DEPLOYER=<its address>  RPC=https://mainnet.base.org
+
+# 1. Grayr registries (you get admin, guardian, upgrader)
+cd contracts
+forge script script/Deploy.s.sol --rpc-url $RPC --account grayr-mainnet --sender $DEPLOYER --broadcast
+
+# 2. ZK stack against those registries and Circle USDC on Base
+cd ../zk/contracts
+VENDOR_REGISTRY=<VendorRegistry proxy from step 1> ATTESTATION_REGISTRY=<AttestationRegistry proxy> \
+USDC=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913 \
+  forge script script/Deploy.s.sol --rpc-url $RPC --account grayr-mainnet --sender $DEPLOYER --broadcast
+# writes zk/contracts/deployments/8453.json
+```
+
+Add `--verify --etherscan-api-key <key>` to either command to publish the source on Basescan
+(a free Etherscan API v2 key covers Base).
+
+Mainnet differences that matter:
+- **USDC's EIP-712 name is `"USD Coin"`** (version `"2"`) on Base mainnet, and `"USDC"` on Base
+  Sepolia (both read from the contracts on 2026-10-17). A Path B merchant's `extra` must use the
+  mainnet name, or USDC rejects the authorization.
+- The ASP's blocklist is empty in the testnet scripts. On mainnet, screen deposits against a
+  real sanctions list before publishing roots.
