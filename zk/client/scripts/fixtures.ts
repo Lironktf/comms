@@ -7,7 +7,7 @@
  */
 import type {InputMap} from "@noir-lang/noir_js";
 import {
-  adminPk, budgetCommitment, h3, noteCommitment, nullifier, nullifierKey, ownerPk, policyHash,
+  adminPk, budgetCommitment, h3, noteCommitment, noteCore, noteInner, nullifier, nullifierKey, ownerPk, policyHash,
   vendorLeaf, type PolicyParams,
 } from "../src/hashes.js";
 import {MerkleTree} from "../src/merkle.js";
@@ -90,12 +90,13 @@ export function witness(name: CircuitName): InputMap {
       nullifiers: arr([nullifier(nk, noteCommitment(n0), 0n), nullifier(nk, noteCommitment(dummy), 5n)]),
       budget_nullifier: s(nullifier(nk, budgetCommitment(b), 1n)),
       change_commitment: s(noteCommitment(change)), new_budget_commitment: s(budgetCommitment(nb)),
+      refund_core: s(noteCore(FIX.label, noteInner(owner, 13n, pol))),
       amount: s(amount), fee: s(fee), token: s(FIX.token), recipient: s(FIX.merchant), now: s(FIX.now), context: s(FIX.context),
       sk: s(FIX.sk), label: s(FIX.label), asp_index: s(aspIdx), asp_path: arr(asp.path(aspIdx)), policy_params: policyInput(POLICY),
       in_amounts: [s(n0.amount), "0"], in_blindings: ["7", "8"], in_indices: ["0", "5"], in_paths: [arr(tree.path(0)), arr(tree.path(5))],
       budget_remaining: s(b.remaining), budget_period: s(period), budget_blinding: "9", budget_index: "1", budget_path: arr(tree.path(1)),
       vendor_level: "3", vendor_categories: s(0b010n), vendor_expiry: s(expiry), vendor_index: "1", vendor_path: arr(vendors.path(1)),
-      change_blinding: "11", new_budget_blinding: "12",
+      change_blinding: "11", new_budget_blinding: "12", refund_blinding: "13",
     };
   }
   if (name === "budget_init") {
