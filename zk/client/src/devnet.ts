@@ -44,6 +44,7 @@ export interface Deployment {
   vendorTree: Address;
   associationSet: Address;
   pool: Address;
+  paymentBook: Address;
   usdc: Address;
   weth: Address;
   swapRouter: Address;
@@ -61,18 +62,30 @@ export interface Devnet {
   stop: () => void;
 }
 
+async function rpcUp(rpcUrl: string): Promise<boolean> {
+  try {
+    const r = await fetch(rpcUrl, {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({jsonrpc: "2.0", id: 1, method: "eth_chainId", params: []})});
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function startAnvil(port = 8545, extraArgs: string[] = []): Promise<{rpcUrl: string; proc: ChildProcess}> {
-  const proc = spawn(join(FOUNDRY_BIN, "anvil"), ["--port", String(port), "--silent", ...extraArgs], {stdio: "ignore"});
   const rpcUrl = `http://127.0.0.1:${port}`;
-  for (let i = 0; i < 100; i++) {
-    try {
-      const r = await fetch(rpcUrl, {method: "POST", headers: {"content-type": "application/json"}, body: JSON.stringify({jsonrpc: "2.0", id: 1, method: "eth_chainId", params: []})});
-      if (r.ok) return {rpcUrl, proc};
-    } catch { /* not up yet */ }
+  // A previous run's anvil may still be shutting down on this port. If we spawned now, ours
+  // would fail to bind and the readiness poll below would be answered by the OLD chain.
+  for (let i = 0; i < 50 && (await rpcUp(rpcUrl)); i++) await new Promise((r) => setTimeout(r, 100));
+  if (await rpcUp(rpcUrl)) throw new Error(`port ${port} already serves an RPC; stop that node first`);
+  const proc = spawn(join(FOUNDRY_BIN, "anvil"), ["--port", String(port), "--silent", ...extraArgs], {stdio: "ignore"});
+  let exited = false;
+  proc.once("exit", () => (exited = true));
+  for (let i = 0; i < 100 && !exited; i++) {
+    if (await rpcUp(rpcUrl)) return {rpcUrl, proc};
     await new Promise((r) => setTimeout(r, 100));
   }
   proc.kill();
-  throw new Error("anvil did not start");
+  throw new Error(exited ? "anvil exited at startup (port in use?)" : "anvil did not start");
 }
 
 /** Runs zk/contracts/script/Deploy.s.sol against a LOCAL anvil and returns the addresses. */
