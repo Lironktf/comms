@@ -202,8 +202,11 @@ async function runDemo(as: "agent" | "wallet", out: Emit) {
 }
 
 app.get("/demo/run", async (req, res) => {
-  res.set({"content-type": "text/event-stream", "cache-control": "no-cache", connection: "keep-alive", "x-accel-buffering": "no"});
+  // no-transform stops proxies (Cloudflare) from compressing, and so buffering, the stream; the
+  // 2 KB comment pushes past any first-chunk buffer so steps arrive as they happen
+  res.set({"content-type": "text/event-stream", "cache-control": "no-cache, no-transform", connection: "keep-alive", "x-accel-buffering": "no"});
   res.flushHeaders();
+  res.write(`: ${" ".repeat(2048)}\n\n`);
   const send = (e: Record<string, unknown>) => res.write(`data: ${JSON.stringify(e)}\n\n`);
   const end = () => res.end();
   const ip = req.ip ?? "?";
