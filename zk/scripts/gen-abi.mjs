@@ -7,6 +7,7 @@ const ZK = join(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(ZK, "contracts", "out");
 const items = {
   shieldedPoolAbi: "ShieldedPool.sol/ShieldedPool.json",
+  paymentBookAbi: "PaymentBook.sol/PaymentBook.json",
   vendorTreeAbi: "VendorTree.sol/VendorTree.json",
   associationSetAbi: "AssociationSetRegistry.sol/AssociationSetRegistry.json",
   mockUsdcAbi: "MockUSDC.sol/MockUSDC.json",
