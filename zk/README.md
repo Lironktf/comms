@@ -17,7 +17,7 @@ Base:
   release, get claimed after a window, go to an arbiter, or expire back.
 - **Batching:** any mix of payment kinds settles in one transaction and one tree insertion.
 
-Research code. **Local anvil and testnet only. Never mainnet, never real funds. Not audited.**
+Research code. **Live on Base Sepolia (testnet). Not on mainnet, no real funds. Not audited.**
 
 ## Status
 
@@ -32,6 +32,7 @@ Research code. **Local anvil and testnet only. Never mainnet, never real funds. 
 | M6 private swaps + batching | done | `client/test/swap-batch.e2e.test.ts` |
 | M7 benchmarks | done (server numbers); **run on your MacBook** | docs/benchmarks.md, `npm run bench -w zk/client` |
 | Refunds + escrow + mixed batching | done | docs/refunds-escrow.md, `RefundsEscrow.t.sol` (16), `refunds-escrow.e2e.test.ts` (13), invariants |
+| Base Sepolia deployment | **live** (2026-10-17); every flow passed on-chain | docs/deploy.md §5, `client/scripts/testnet*.ts`, `benchmarks/results/base-sepolia-2026-10-17.json` |
 
 Headline numbers (build server, see docs/benchmarks.md):
 
@@ -39,6 +40,35 @@ Headline numbers (build server, see docs/benchmarks.md):
 - Paid x402 call end to end: **~1.45 s**.
 - Pay-a-merchant transaction: **1.53M L2 gas**, falling to **0.98M per payment in batches of 8**.
 - Verifier: **0.67M gas** (bb `--optimized`; the default verifier costs 2.18M).
+- Live on Base Sepolia: L2 gas within 2% of anvil; each proof-carrying payment posts **~114.6k L1
+  gas** of data (the proof). At Sepolia's 0.006 gwei, a payment cost ~0.0000092 ETH.
+
+## Live on Base Sepolia
+
+| contract | address |
+|---|---|
+| ShieldedPool | `0x7342eC59ee29fEAA116FF05817b16b839De88145` |
+| PaymentBook (refunds, escrow) | `0xabe07B879f70b544aaDE7d2Fb55067191f6622da` |
+| VendorTree (verified merchants) | `0xe942838e6B9a003ea23aAC95fd87089A96eDd30a` |
+| AssociationSetRegistry (compliance roots) | `0x354eb4A01B4163AC2A2e722aACCcBbb7f79C8743` |
+| Grayr VendorRegistry / AttestationRegistry | `0x854c3D3D610F7470C28192926dF0b227257E86fc` / `0xa0B4dfD191d689c84d6668096F29efe0A805AB2a` |
+| token | Circle test USDC `0x036CbD53842c5426634e7929541eC2318f3dCF7e`, 10,000 USDC max per deposit |
+
+All addresses, including the verifiers and Poseidon2, are in `contracts/deployments/84532.json`
+(deploy block 48217656). Run against it, from `zk/client`, with a funded testnet key holding the
+roles in docs/deploy.md §5:
+
+```bash
+TESTNET_PRIVATE_KEY=... npx tsx scripts/testnet.ts        # merchant, deposits, ASP root, budget, refundable pay + refund, agent pay
+TESTNET_PRIVATE_KEY=... npx tsx scripts/testnet-flows.ts  # escrow x3, batching, x402 Path A and Path B over HTTP
+```
+
+What hasn't been done yet:
+- **Off-chain parts ran on one server.** The merchant, facilitator and relayer ran as local
+  processes (127.0.0.1) pointed at Sepolia, and the merchant was the test key's own address.
+  Nothing is hosted for others to use.
+- **The anonymity set is a handful of test deposits,** so these runs test the machinery, not
+  privacy.
 
 ## Quick start (local only)
 
@@ -68,6 +98,10 @@ npm run bench -w zk/client                         # M7 numbers for your machine
   pool are all bound, so nobody can redirect, replay or alter a payment.
 - **Relayers.** A relayer (or the merchant's facilitator) submits the proof and is paid a fee
   from inside it. It learns nothing but what is public anyway.
+  - Anyone can run one; the code is `client/src/relayer.ts`.
+  - It can't redirect or alter a payment, only submit it or refuse.
+- **What a merchant changes.** For Path A, the merchant adds the `shielded` scheme
+  (`ShieldedServerScheme`) and uses a facilitator that supports it. For Path B, nothing changes.
 - **Policies.** The policy hash lives inside the agent's notes. The only circuit that spends them
   without the human's admin key is `policy_pay`, which enforces the policy. The budget is a
   private note, consumed and re-created on every payment.
@@ -81,7 +115,7 @@ Details: **docs/protocol.md** (spec) · **docs/security.md** (threat model + con
 audit + test matrix) · **docs/privacy.md** (what is and isn't hidden) · **docs/x402.md** ·
 **docs/path-b.md** · **docs/policy-and-compliance.md** · **docs/refunds-escrow.md** · **docs/benchmarks.md** ·
 **docs/learn-zk.md** (ZK explained through this code, with exercises) · **docs/deploy.md**
-(exact commands for **you** to run) · **docs/future-research.md**.
+(deploy commands and the live Sepolia runs) · **docs/future-research.md**.
 
 ## Layout
 
@@ -97,7 +131,8 @@ zk/
   contracts/         Foundry: ShieldedPool, PaymentBook, VendorTree, AssociationSetRegistry, MerkleTree, adapters,
                      generated verifiers (src/verifiers), mocks, deploy script, tests
   client/            @actp/zk (TypeScript): Poseidon2, keys, notes + encryption, sync, prover (bb.js),
-                     ShieldedWallet / AgentWallet, relayer, x402 schemes, ASP, devnet, demo, bench
+                     ShieldedWallet / AgentWallet, relayer, x402 schemes, ASP, devnet, demo, bench,
+                     scripts/testnet*.ts (live Base Sepolia runs)
   test-vectors/      Noir-printed vectors asserted by Solidity and TS
   benchmarks/results/  raw benchmark JSON per machine
   scripts/           build-circuits.sh, rename_verifier.py, gen-abi.mjs

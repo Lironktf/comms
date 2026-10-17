@@ -52,7 +52,12 @@ public sees "the pool paid M $X", never which agent paid. The proof enforces the
 policy (Grayr-verified merchant level, category, caps, a private budget). Compliance is built in
 through association sets and ragequit. Noir + Barretenberg circuits, Foundry contracts, a
 TypeScript client, x402 v2 scheme plugins (Path A), and pool-as-`exact`-payer through EIP-1271
-(Path B, verified against real Base USDC). See [`zk/README.md`](zk/README.md).
+(Path B, verified against real Base USDC).
+
+**Live on Base Sepolia** (2026-10-17): ShieldedPool `0x7342eC59ee29fEAA116FF05817b16b839De88145`.
+Every flow has run on-chain: private and agent payments, refunds, escrow, batching, and x402
+over HTTP on both paths, including Path B settling real Circle test USDC. Not audited, not on
+mainnet. See [`zk/README.md`](zk/README.md).
 
 ## Architecture
 
