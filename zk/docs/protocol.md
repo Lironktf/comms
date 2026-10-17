@@ -93,7 +93,7 @@ nullifier  = H3(NULL, nk, H2(commitment, leafIndex))
 | circuit | public inputs | private witness (summary) |
 |---|---|---|
 | `transact` | root, aspRoot, nullifiers[2], outCommitments[2], publicAmount, fee, token, recipient, deferred, context | sk, label + ASP path, policy (+ params, adminSk if policy≠0), 2 input notes + paths, 2 output notes |
-| `policy_pay` | root, aspRoot, vendorRoot, vendorChecked, nullifiers[2], budgetNullifier, changeCommitment, newBudgetCommitment, amount, fee, token, recipient, now, context | sk, label + ASP path, policy params, 2 inputs, budget note + path, vendor leaf + path, blindings |
+| `policy_pay` | root, aspRoot, vendorRoot, vendorChecked, nullifiers[2], budgetNullifier, changeCommitment, newBudgetCommitment, refundCore, amount, fee, token, recipient, now, context | sk, label + ASP path, policy params, 2 inputs, budget note + path, vendor leaf + path, blindings (change, budget, refund) |
 | `budget_init` | budgetCommitment, now, context | adminSk, policy params, agent owner, blinding |
 | `ragequit` | root, nullifier, amount, token, label | sk, blinding, policy, leaf index + path |
 
@@ -105,8 +105,9 @@ constraint-by-constraint audit is in security.md.
 ```
 context = keccak256(abi.encode(keccak256("grayr.zk.context.v1"), block.chainid, address(pool), kind,
             feeRecipient, requestId, deadline, keccak(encryptedOutput0), keccak(encryptedOutput1), extra)) mod p
-kind:  1 transact · 2 policyPay · 3 budgetInit · 4 authorize (Path B) · 5 swap
-extra: authorize → keccak(validAfter, validBefore, nonce); swap → keccak(adapter, tokenOut, minAmountOut, keccak(data))
+kind:  1 transact · 2 policyPay · 3 budgetInit · 4 authorize (Path B) · 5 swap · 6 pay (refundable/escrow)
+extra: authorize → keccak(validAfter, validBefore, nonce); swap → keccak(adapter, tokenOut, minAmountOut, keccak(data));
+       pay, policyPay → keccak(mode, arbiter, claimableAt, expiresAt, payerAuth, keccak(encryptedRefund))   (PayOptions)
 ```
 
 The contract recomputes `context` from calldata, `block.chainid` and `address(this)`, and passes it
@@ -124,6 +125,10 @@ forces its amount to 0. The contract later inserts `H3(amount, token, core)`:
 - **Path B refund:** `amount = publicAmount`, same token, inserted only if the EIP-3009
   authorization expires unused.
 - **Swap output:** `amount = tokens actually received`, `token = tokenOut`.
+- **Refundable / escrowed payment (`pay`, kind 6):** out1 is the payer's refund core.
+  `H3(refund, token, core)` is inserted each time the merchant refunds or an escrow returns funds
+  (refunds-escrow.md). `policy_pay` produces the same kind of core as a public output, constrained
+  to the agent's owner, policy and label.
 
 `transact()` always passes `deferred = false`, and `authorizeTransfer()` / `swap()` pass `true`,
 so a proof can't be moved between modes.
@@ -138,8 +143,12 @@ All entry points are `nonReentrant`.
 | function | effect |
 |---|---|
 | `deposit(token, amount, inner, ct)` | pull tokens (rejects fee-on-transfer by balance delta), new label, insert (cm, 0) |
-| `transact` / `transactBatch` | spend 2 notes, insert 2 outputs, pay `recipient` `publicAmount`, pay `feeRecipient` `fee` |
-| `payWithPolicy` / `payWithPolicyBatch` | as above via policy_pay; plus vendor root known **and** recipient currently an Active Grayr vendor (live) |
+| `transact` | spend 2 notes, insert 2 outputs, pay `recipient` `publicAmount`, pay `feeRecipient` `fee` |
+| `pay` | deferred transact: insert change; REFUNDABLE pays the merchant now, ESCROW sends the amount to the PaymentBook; the book records `keccak(PaymentRecord)` under id = first nullifier |
+| `payWithPolicy` | as transact via policy_pay; plus vendor root known **and** recipient currently an Active Grayr vendor (live); DIRECT, REFUNDABLE or ESCROW per `PayOptions` |
+| `batch(transacts, pays, policyPays)` | any mix of the three in one tx and ONE tree insertion; interactions after all effects |
+| `shieldRefund` | PaymentBook only: insert `H3(amount, token, refundCore)` for funds the book just returned |
+| PaymentBook: `refund`, `releaseEscrow`, `disputeEscrow`, `claimEscrow`, `resolveEscrow`, `expireEscrow` | refund and escrow lifecycle (refunds-escrow.md) |
 | `initBudget` | insert a budget note; each commitment can be initialized once (no replay) |
 | `ragequit` | spend 1 note publicly; pay `depositorOf[label]` |
 | `authorizeTransfer` | spend notes into ONE pending EIP-3009 digest (Path B) + change; refund core stored |

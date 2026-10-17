@@ -9,6 +9,7 @@
 | private transfer | "some spend happened" (2 nullifiers, 2 commitments, ciphertexts) | sender, recipient, amount |
 | swap | "the pool swapped X of A for Y of B" | who |
 | Path B payment | "the pool authorized a transfer of X to M" and later USDC moved pool → M | who |
+| refundable / escrow payment | as a payment, **plus** the mode and terms (escrow windows, arbiter address), and later each refund amount, release, claim, dispute or expiry, all tied to the payment id | who paid, and who receives the refund note. A refund is just a new note in the tree; spending it later doesn't link back |
 | ragequit | **everything** (deposit label, amount, depositor gets paid): it's the public exit | n/a |
 | policy payment | same as a payment, **plus the fact that the payer is policy-bound** (it calls `payWithPolicy`, carries a vendor-tree root and a timestamp) | the policy itself, caps, budget, remaining budget, which agent/owner. One policy bit IS public: `vendorChecked` (does this policy require Grayr-verified merchants?) |
 
@@ -40,6 +41,9 @@ receive ordinary USDC. Hidden merchant revenue (shielded receiving) is in future
 | "one deposit, many spends": all spends descend from one label | the label is never revealed by private spends (proven in ZK); only ragequit reveals it |
 | gas payer | never the user: the relayer submits. A user submitting from their own address would deanonymize themselves |
 | ciphertext metadata | fixed sizes per note type (181 B value note, 137 B budget note), so sizes leak the note TYPE only, which the entry point already reveals |
+| escrow release/dispute transactions | the payer acts with secrets, never a key. Submit them from a relayer or a fresh address: sending them from an address linked to you links you to the payment |
+| refund timing | a refund note appears when the merchant refunds; spending it right after re-creates a timing link. Wait, as with deposits |
+| payment modes split the anonymity set | refundable and escrow payments are distinguishable from direct ones (different entry point / event); payers who use the same mode hide among each other |
 | policy payments form their own anonymity set | they are distinguishable from plain payments by the entry point; the set is "all policy-bound agents", not all users |
 
 ## What the proof does NOT hide

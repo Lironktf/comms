@@ -28,9 +28,11 @@ build server and is labeled as such.
 - **Verifier gas:** isolated in `contracts/test/Verifiers.t.sol`. **Tree insertion:** isolated in
   `contracts/test/MerkleTree.t.sol` (`forge test -vv`).
 
-> After the `require_verified_vendor` flag was added, `transact` is 9,452 gates (was 9,378) and
-> `policy_pay` is 13,160 (was 13,079). The timings and gas below were measured before that
-> change. Re-run `npm run bench` for current numbers; the difference is under 1%.
+> **Current numbers (2026-10-17 run, refunds + escrow included):** `transact` 9,452 gates,
+> `policy_pay` 13,308 gates (+148 for the refund core). Results are in
+> `benchmarks/results/server-2026-10-17.json` and the refund/escrow/batching gas table is in
+> refunds-escrow.md. That run used 5 proving runs, so its timings are noisier. The detailed
+> tables below are the earlier 10-run measurement (commit dca4509).
 
 ## Results: build server (Intel Haswell VM, 4 vCPU, 8 GB, Linux, Node 24.19, nargo 1.0.0-beta.25, bb 5.2.1, commit dca4509, 10 runs)
 

@@ -1,12 +1,18 @@
 # Later research (design notes only; nothing here is built)
 
+(Refunds and time-locked escrow with an optional arbiter ARE built now: see refunds-escrow.md.
+The zkTLS proof-of-delivery part below is still research.)
+
 ## Recursive aggregation (biggest lever for micropayments)
 
 Today each payment costs ~666k gas for its own UltraHonk verification. Instead:
 
-- An aggregator proves *"I verified N transact proofs"* in one Noir circuit, using
-  `std::verify_proof` with the `noir-recursive` target. The inner proofs must use a
-  Poseidon2 transcript, not keccak.
+- An aggregator proves *"I verified N transact proofs"* in one Noir circuit, using the stdlib's
+  in-circuit verifier. Verified present in nargo 1.0.0-beta.25:
+  `std::verify_proof_with_type` (found in the nargo binary's embedded stdlib).
+  - The inner proofs must use a recursion-friendly (Poseidon2) transcript, not keccak, so the
+    payment circuits would need a second proving target.
+  - Exact flags: check bb 5.2.1's docs before building.
 - The circuit outputs the concatenated public inputs, or a hash of them that the contract checks.
 - On-chain: one verification (~0.7M gas) plus N × (nullifier writes + transfers), with tree
   insertion batched as today.
@@ -34,11 +40,12 @@ RLN: each request reveals `y = a0 + a1·x`, with `a1 = H(sk, epoch)` and `x = H(
 requests in the same epoch reveal `sk`, and the abuser's stake is slashed. This gives "N free
 calls per day per anonymous agent" without accounts, and fits x402 free tiers.
 
-## Escrow notes + zkTLS proof of delivery (x402 refunds)
+## zkTLS proof of delivery (automatic escrow release)
 
-- Pay into an escrow note: `(merchant, amount, request hash, deadline)`.
-- The merchant claims with a zkTLS proof (TLSNotary / Reclaim) that it served a response to that
-  request. Otherwise the agent reclaims after the deadline.
+- **Built:** escrowed x402 payments (`PaymentBook`): payer release, merchant claim after a window,
+  arbiter disputes, expiry refunds.
+- **Not built:** letting the merchant claim *early* with a zkTLS proof (TLSNotary / Reclaim)
+  that it served a response to that request id, instead of waiting out the window or an arbiter.
 - **Open problem:** defining "delivery" for arbitrary APIs.
 
 ## ZK receipts for owners and auditors

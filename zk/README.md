@@ -12,6 +12,10 @@ Base:
   level, allowed category, per-payment cap, and a private monthly budget. So an agent can be
   trusted with money without anyone seeing its finances.
 - **Compliance is part of the core:** Privacy Pools-style association sets and ragequit.
+- **Refunds and escrow without unmasking the payer:** every refundable or escrowed payment
+  carries a sealed refund slot only the payer can spend. Merchants refund by request id; escrows
+  release, get claimed after a window, go to an arbiter, or expire back.
+- **Batching:** any mix of payment kinds settles in one transaction and one tree insertion.
 
 Research code. **Local anvil and testnet only. Never mainnet, never real funds. Not audited.**
 
@@ -27,6 +31,7 @@ Research code. **Local anvil and testnet only. Never mainnet, never real funds. 
 | M5 compliance: association sets + ragequit | done | pool e2e, `ShieldedPool.t.sol` |
 | M6 private swaps + batching | done | `client/test/swap-batch.e2e.test.ts` |
 | M7 benchmarks | done (server numbers); **run on your MacBook** | docs/benchmarks.md, `npm run bench -w zk/client` |
+| Refunds + escrow + mixed batching | done | docs/refunds-escrow.md, `RefundsEscrow.t.sol` (16), `refunds-escrow.e2e.test.ts` (13), invariants |
 
 Headline numbers (build server, see docs/benchmarks.md):
 
@@ -43,10 +48,10 @@ noirup -v 1.0.0-beta.25 && bbup -v 5.2.1 && foundryup
 npm install && (cd zk/contracts && npm install --ignore-scripts)
 
 zk/scripts/build-circuits.sh                       # circuits -> verifiers + client artifacts (deterministic)
-(cd zk/contracts && forge build && forge test)     # 35 Foundry tests incl. real-proof verifier tests, invariants
+(cd zk/contracts && forge build && forge test)     # 52 Foundry tests incl. real-proof verifier tests, invariants
 (cd zk/circuits && nargo test --workspace)         # 16 Noir tests
-npm run test -w zk/client                          # shared-vector unit tests
-(cd zk/client && npx vitest run --config vitest.e2e.config.ts)   # 50 e2e tests on anvil, real proofs
+npm run test -w zk/client                          # shared-vector + circuit-negative unit tests
+(cd zk/client && npx vitest run --config vitest.e2e.config.ts)   # 65 e2e tests on anvil, real proofs
 npm run demo -w zk/client                          # narrated: an agent privately pays x402 APIs
 npm run bench -w zk/client                         # M7 numbers for your machine
 ```
@@ -74,7 +79,7 @@ npm run bench -w zk/client                         # M7 numbers for your machine
 
 Details: **docs/protocol.md** (spec) · **docs/security.md** (threat model + constraint-by-constraint
 audit + test matrix) · **docs/privacy.md** (what is and isn't hidden) · **docs/x402.md** ·
-**docs/path-b.md** · **docs/policy-and-compliance.md** · **docs/benchmarks.md** ·
+**docs/path-b.md** · **docs/policy-and-compliance.md** · **docs/refunds-escrow.md** · **docs/benchmarks.md** ·
 **docs/learn-zk.md** (ZK explained through this code, with exercises) · **docs/deploy.md**
 (exact commands for **you** to run) · **docs/future-research.md**.
 
@@ -89,7 +94,7 @@ zk/
     budget_init/     admin mints an agent budget note
     ragequit/        public exit to the original depositor
     m0_commitment/ m0_merkle/   learning circuits
-  contracts/         Foundry: ShieldedPool, VendorTree, AssociationSetRegistry, MerkleTree, adapters,
+  contracts/         Foundry: ShieldedPool, PaymentBook, VendorTree, AssociationSetRegistry, MerkleTree, adapters,
                      generated verifiers (src/verifiers), mocks, deploy script, tests
   client/            @actp/zk (TypeScript): Poseidon2, keys, notes + encryption, sync, prover (bb.js),
                      ShieldedWallet / AgentWallet, relayer, x402 schemes, ASP, devnet, demo, bench

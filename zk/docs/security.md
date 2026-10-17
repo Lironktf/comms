@@ -21,6 +21,10 @@ each circuit relies on and the constraint that pins it.
 | sanctioned depositor | hide in the crowd | private spends must prove the deposit label is in the current ASP set; ragequit only pays the original depositor, publicly |
 | pool owner | rug | owner can only configure tokens/adapters; cannot move, freeze or redirect funds, or pause spends/ragequit; not upgradeable |
 | ASP operator | trap honest users | cannot: ragequit ignores the ASP. Can censor private spends of a label (that is its job) |
+| merchant | redirect or inflate a refund, keep escrowed funds | the refund note's core is bound in the payment proof; the book accepts only the exact stored `keccak(record)`; refunds are capped at the amount paid; escrow claims need the window (or a payer release) and, for vendor-checked payments, a still-Active vendor |
+| relayer | change payment terms (escrow → direct, shorter window, other refund ciphertext) or dispute instead of release | `PayOptions` is hashed into `context`; release and dispute use independent secrets |
+| agent | have a colluding merchant "refund" it into an unrestricted note | `policy_pay` constrains `refund_core` to the agent's own owner, policy and label |
+| arbiter | steal escrowed funds | it can only split between the merchant and the payer's bound refund note, only while disputed and before expiry |
 | Grayr verifier | approve a bad merchant | out of scope (same trust as Grayr V2); revocation is live via the registry status check |
 
 ## 2. Constraint audit
@@ -68,6 +72,8 @@ the reason is given).
 | change | C: `sum_in − amount − fee` then `assert_max_bit_size::<128>()`, so a negative result (which wraps to ~2^254) is rejected; same owner/policy/label |
 | second output | none: an agent can only move policy funds to a verified vendor (or back to itself as change) |
 | `now` | P: contract requires `now ≤ block.timestamp` and `block.timestamp − now ≤ 1 h` |
+| refund core | C: `refund_core == H3(NOTE, label, H3(owner, refund_blinding, policy))` with the agent's own owner, policy and label (refund_blinding is a free witness, which is harmless). P: `< p`; materialized only by `shieldRefund` |
+| payment terms | P only: `PayOptions` bound via `context` extra |
 
 **Rollover analysis (no double budget):**
 - Exactly one budget note is consumed per payment, and exactly one successor is created, so a
@@ -109,6 +115,9 @@ the reason is given).
 | Path B single use / no double refund | USDC nonce (single use) + `closed` flag; refund requires `now ≥ validBefore` (USDC requires `<`) and `authorizationState == false` |
 | swap can't be stolen by the adapter | pool measures received `tokenOut`; `≥ minAmountOut` bound in the proof; whole tx reverts otherwise |
 | owner powers minimal | only `configureToken`, `setSwapAdapter`; known tokens can never be un-known (notes stay spendable) |
+| refunds can't mint value | refund notes are inserted only for funds that actually reached the pool: the book transfers them, or pulls them from the merchant with a balance-delta check |
+| PaymentBook trust | deployed by the pool's constructor (fixed address); only it can call `shieldRefund`; only the pool can `open` records; stores `keccak(record)` once per fresh nullifier |
+| escrow accounting | book balance == open escrows (invariant test) |
 
 ## 4. Test matrix (all passing; see README for commands)
 
@@ -118,7 +127,8 @@ the reason is given).
 | shared vectors | Noir prints → `vectors.json` → asserted in `Hashes.t.sol` and `client/test/hashes.test.ts` |
 | verifiers (real proofs) | `Verifiers.t.sol`: each circuit's honest proof verifies; **every single public input** flipped → rejected; proof bytes flipped → rejected; wrong input count; cross-circuit proof |
 | pool unit | `ShieldedPool.t.sol` (19): every pre-proof revert, payments, batch atomicity, replay, ASP grace, ragequit, budget replay, Path B lifecycle with FiatToken semantics, root window |
-| invariants | `Invariant.t.sol`: random deposits/spends/replays/ragequits/authorizations/settlements/refunds with a sound mock verifier: **pool balance == unspent notes + pending authorizations**, no replay ever succeeds, tree aligned. 1024 calls, 0 reverts |
+| refunds + escrow | `RefundsEscrow.t.sol` (16), circuit negatives in `client/test/circuits.test.ts`, e2e `refunds-escrow.e2e.test.ts` (13); see refunds-escrow.md |
+| invariants | `Invariant.t.sol`: random deposits/spends/replays/ragequits/authorizations/settlements/refunds, refundable and escrowed payments, merchant refunds and every escrow outcome, with a sound mock verifier: **pool balance == unspent notes + pending authorizations**, **book balance == open escrows**, no over-refund, no replay ever succeeds, tree aligned. 1024 calls, 0 reverts |
 | tree | `MerkleTree.t.sol`: differential fuzz of batch insertion vs naive full recomputation |
 | real USDC | `PathBFork.t.sol` on local forks of Base Sepolia and Base mainnet: the real FiatToken accepts the pool's EIP-1271 authorization and rejects anything else |
 | e2e (anvil, real proofs) | pool (24), policy (15), x402 Path A + B (6), swaps + batching (5): wrong secret, tampered recipient/amount/fee/fee recipient/request id/deadline/ciphertext/commitment/nullifier/token, stale/unknown roots, non-canonical nullifier, garbage proof, front-runner, over-cap, over-fee, over-budget, unverified/low-level/wrong-category merchant, suspended vendor, policy bypass via transact, forged admin, budget replay, ASP exclusion, ragequit, expired Path-B refund |
@@ -136,6 +146,11 @@ the reason is given).
   bounds this, and it counts against the budget.
 - **The policy admin is fully trusted** by construction: it can sweep the agent's funds and mint
   budgets.
+- **Refunds don't restore an agent's budget**, by design: the budget counts what the agent tried
+  to spend.
+- **An escrow's merchant can be griefed by a dispute** (when an arbiter was chosen): funds wait
+  until the arbiter resolves or the escrow expires back to the payer. Merchants choose whether to
+  accept escrow at all (x402 `paymentModes`).
 - **Upstream components:** UltraHonk soundness rests on Barretenberg. bb 5.2.1 includes the
   October 2026 native-verifier fix, which concerned recursive pairing accumulators. We don't use
   recursion.
