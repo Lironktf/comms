@@ -10,6 +10,12 @@
  *   Merchant changes: register ShieldedServerScheme + a facilitator that supports it. No keys,
  *   no decryption: M receives ordinary USDC.
  *
+ * PAYMENT MODES (Path A): requirements.extra.paymentModes lists what the merchant accepts,
+ *   default ["direct", "refundable"]. "refundable" costs the merchant nothing (it is paid at
+ *   once and MAY refund later); "escrow" means it is paid when it claims (or the agent releases),
+ *   so a merchant lists it only if it wants to offer buyer protection. extra.escrow =
+ *   {maxClaimDelaySeconds} bounds how long it waits. The agent picks the mode (ShieldedClientOptions.terms).
+ *
  * PATH B: the pool as a standard `exact` payer (zero merchant changes).
  *   agent -> relayer: pool.authorizeTransfer(proof...) registers ONE EIP-3009 digest
  *   agent -> merchant: an ordinary `exact` payload with from = pool
@@ -25,11 +31,21 @@ import type {x402Facilitator} from "@x402/core/facilitator";
 import type {Address, Hex, PublicClient} from "viem";
 import {fromWire, parseBundle, toWire} from "../serde.js";
 import {randomBytes32} from "../context.js";
-import type {AgentWallet, Bundle, ShieldedWallet} from "../wallet.js";
+import type {AgentWallet, Bundle, PaymentTerms, ShieldedWallet} from "../wallet.js";
+import {PAY_MODE, type PayOptions} from "../context.js";
 import type {Relayer, RelayResult} from "../relayer.js";
 import {shortError, uploadBundle} from "../relayer.js";
 
 export const SHIELDED = "shielded";
+
+export type PaymentModeName = PaymentTerms["mode"];
+const MODE_NAME: Record<number, PaymentModeName> = {[PAY_MODE.DIRECT]: "direct", [PAY_MODE.REFUNDABLE]: "refundable", [PAY_MODE.ESCROW]: "escrow"};
+const DEFAULT_MODES: PaymentModeName[] = ["direct", "refundable"];
+
+export function acceptedModes(req: PaymentRequirements): PaymentModeName[] {
+  const m = req.extra?.paymentModes;
+  return Array.isArray(m) ? (m as PaymentModeName[]) : DEFAULT_MODES;
+}
 
 /** Signature bytes the agent puts in a Path-B `exact` payload. The pool ignores them (it
  *  answers EIP-1271 from its own registry); they just must NOT be 65 bytes, so facilitators
@@ -90,7 +106,13 @@ export class ShieldedFacilitatorScheme implements SchemeNetworkFacilitator {
     return [this.relayer.address];
   }
 
-  private bind(payload: PaymentPayload, req: PaymentRequirements): {bundle: Bundle} | {error: string} {
+  /** Chain time, not wall time: the pool checks deadlines and escrow windows against blocks. */
+  private async chainNow(): Promise<bigint> {
+    return (await this.relayer.cfg.publicClient.getBlock()).timestamp;
+  }
+
+  private async bind(payload: PaymentPayload, req: PaymentRequirements): Promise<{bundle: Bundle} | {error: string}> {
+    const now = await this.chainNow();
     let bundle: Bundle;
     try {
       const ref = payload.payload.bundleRef;
@@ -108,24 +130,35 @@ export class ShieldedFacilitatorScheme implements SchemeNetworkFacilitator {
     if (req.network !== this.opts.network) return {error: "wrong network"};
     if (String(req.extra?.pool ?? "").toLowerCase() !== this.relayer.cfg.pool.toLowerCase()) return {error: "wrong pool"};
     let recipient: Address, amount: bigint, token: Address;
+    let opts: PayOptions | null = null;
     if (bundle.kind === "transact") {
       ({recipient, publicAmount: amount, token} = bundle.inputs);
+    } else if (bundle.kind === "pay") {
+      ({recipient, publicAmount: amount, token} = bundle.inputs);
+      opts = bundle.opts;
     } else if (bundle.kind === "policyPay") {
       ({recipient, amount, token} = bundle.inputs);
+      opts = bundle.opts;
     } else {
       return {error: `bundle kind ${bundle.kind} is not a payment`};
+    }
+    const mode = MODE_NAME[opts?.mode ?? PAY_MODE.DIRECT];
+    if (!mode || !acceptedModes(req).includes(mode)) return {error: `merchant does not accept ${mode ?? "this"} payments`};
+    if (opts && opts.mode === PAY_MODE.ESCROW) {
+      const maxDelay = BigInt(String((req.extra?.escrow as {maxClaimDelaySeconds?: number} | undefined)?.maxClaimDelaySeconds ?? 86400));
+      if (opts.claimableAt > now + maxDelay) return {error: "escrow claim delay longer than the merchant accepts"};
     }
     if (recipient.toLowerCase() !== req.payTo.toLowerCase()) return {error: "proof does not pay payTo"};
     if (amount !== BigInt(req.amount)) return {error: "proof amount != required amount"};
     if (token.toLowerCase() !== req.asset.toLowerCase()) return {error: "proof token != required asset"};
     if (bundle.ext.requestId === `0x${"00".repeat(32)}`) return {error: "payment must bind an x402 request id"};
-    const maxDeadline = BigInt(Math.floor(Date.now() / 1000) + req.maxTimeoutSeconds + (this.opts.maxDeadlineSlackSeconds ?? 3600));
+    const maxDeadline = now + BigInt(req.maxTimeoutSeconds + (this.opts.maxDeadlineSlackSeconds ?? 3600));
     if (bundle.ext.deadline > maxDeadline) return {error: "deadline too far in the future"};
     return {bundle};
   }
 
   async verify(payload: PaymentPayload, req: PaymentRequirements): Promise<VerifyResponse> {
-    const b = this.bind(payload, req);
+    const b = await this.bind(payload, req);
     if ("error" in b) return {isValid: false, invalidReason: "invalid_payload", invalidMessage: b.error};
     try {
       // fee terms + eth_call simulation: verifies the PROOF onchain (plus roots, nullifiers,
@@ -138,7 +171,7 @@ export class ShieldedFacilitatorScheme implements SchemeNetworkFacilitator {
   }
 
   async settle(payload: PaymentPayload, req: PaymentRequirements): Promise<SettleResponse> {
-    const b = this.bind(payload, req);
+    const b = await this.bind(payload, req);
     if ("error" in b) return {success: false, errorReason: "invalid_payload", errorMessage: b.error, transaction: "", network: req.network};
     try {
       const r: RelayResult = await this.relayer.relay(b.bundle);
@@ -167,6 +200,8 @@ export interface ShieldedClientOptions {
   wallet: ShieldedWallet | AgentWallet;
   /** refuse requirements whose facilitator fee exceeds this (atomic units) */
   maxFee: bigint;
+  /** how to pay (default direct). Refused up front if the merchant doesn't accept the mode. */
+  terms?: PaymentTerms;
 }
 
 export class ShieldedClientScheme implements SchemeNetworkClient {
@@ -181,12 +216,15 @@ export class ShieldedClientScheme implements SchemeNetworkClient {
     if (fee > this.opts.maxFee) throw new Error(`shielded: facilitator fee ${fee} exceeds max ${this.opts.maxFee}`);
     const feeRecipient = String(req.extra?.feeRecipient ?? "0x0000000000000000000000000000000000000000") as Address;
     const requestId = randomBytes32();
-    const deadline = BigInt(Math.floor(Date.now() / 1000) + req.maxTimeoutSeconds);
     const w = this.opts.wallet;
+    // chain time: the pool checks the deadline against block.timestamp
+    const deadline = (await w.opts.sync.client.getBlock()).timestamp + BigInt(req.maxTimeoutSeconds);
+    const terms = this.opts.terms;
+    if (terms && !acceptedModes(req).includes(terms.mode)) throw new Error(`shielded: merchant does not accept ${terms.mode} payments`);
     const bundle =
       "preparePolicyPayment" in w
-        ? await (w as AgentWallet).preparePolicyPayment({amount: BigInt(req.amount), recipient: req.payTo as Address, fee, feeRecipient, requestId, deadline})
-        : await w.preparePayment({token: req.asset as Address, amount: BigInt(req.amount), recipient: req.payTo as Address, fee, feeRecipient, requestId, deadline});
+        ? await (w as AgentWallet).preparePolicyPayment({amount: BigInt(req.amount), recipient: req.payTo as Address, fee, feeRecipient, requestId, deadline, terms})
+        : await w.preparePayment({token: req.asset as Address, amount: BigInt(req.amount), recipient: req.payTo as Address, fee, feeRecipient, requestId, deadline, terms});
     // Proof bundles are ~9 KB: too big for an HTTP header once base64'd. If the facilitator
     // offers a bundle store, upload and send only the content id.
     const upload = req.extra?.bundleUploadUrl;
