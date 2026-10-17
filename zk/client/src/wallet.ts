@@ -5,12 +5,16 @@ import {
 } from "./hashes.js";
 import {addressToField, fieldToAddress, randomField, toHex32} from "./field.js";
 import {addressOf, type AdminKeys, type ShieldedAddress, type SpendingKeys} from "./keys.js";
-import {commitmentOf, encryptNote, newNote, tryDecryptNote, type AnyNote, type BudgetNote, type Note} from "./notes.js";
+import {commitmentOf, encryptNote, newNote, tryDecryptCore, tryDecryptNote, type AnyNote, type BudgetNote, type Note} from "./notes.js";
 import type {PoolSync} from "./chain.js";
 import type {AspProvider} from "./asp.js";
 import type {VendorTreeSync} from "./vendors.js";
 import type {Prover} from "./prover.js";
-import {authorizeExtra, computeContext, KIND, swapExtra, ZERO_ADDRESS, ZERO_BYTES32, type ExtData, type Kind} from "./context.js";
+import {
+  authorizeExtra, computeContext, DIRECT_PAYMENT, escrowSecrets, KIND, PAY_MODE, payExtra, swapExtra, ZERO_ADDRESS, ZERO_BYTES32,
+  type ExtData, type Kind, type PayOptions,
+} from "./context.js";
+import type {PaymentRecordView} from "./chain.js";
 
 // ---------------------------------------------------------------------------
 // Bundles: everything a submitter (relayer / facilitator / merchant) needs. They contain
@@ -37,6 +41,8 @@ export interface PolicyInputs {
   budgetNullifier: bigint;
   changeCommitment: bigint;
   newBudgetCommitment: bigint;
+  /** core of the agent's refund note (same owner/policy/label; circuit-constrained) */
+  refundCore: bigint;
   amount: bigint;
   fee: bigint;
   token: Address;
@@ -59,7 +65,8 @@ export interface SwapParams {
 
 export type Bundle =
   | {kind: "transact"; proof: Hex; inputs: TransactInputs; ext: ExtData}
-  | {kind: "policyPay"; proof: Hex; inputs: PolicyInputs; ext: ExtData}
+  | {kind: "pay"; proof: Hex; inputs: TransactInputs; ext: ExtData; opts: PayOptions}
+  | {kind: "policyPay"; proof: Hex; inputs: PolicyInputs; ext: ExtData; opts: PayOptions}
   | {kind: "initBudget"; proof: Hex; budgetCommitment: bigint; timestamp: bigint; ext: ExtData}
   | {kind: "authorize"; proof: Hex; inputs: TransactInputs; ext: ExtData; auth: Authorization3009}
   | {kind: "swap"; proof: Hex; inputs: TransactInputs; ext: ExtData; swap: SwapParams};
@@ -71,6 +78,27 @@ export interface RagequitBundle {
   amount: bigint;
   token: Address;
   label: bigint;
+}
+
+/**
+ * How a payment settles.
+ *   direct      merchant paid now, final (the default)
+ *   refundable  merchant paid now; it can later refund (part of) it to you privately
+ *   escrow      the pool's PaymentBook holds it. You release it (or, with an arbiter, dispute it
+ *               before `claimAfterSeconds`); the merchant can claim after `claimAfterSeconds`;
+ *               after `expireAfterSeconds` an unclaimed escrow comes back to you.
+ */
+export type PaymentTerms =
+  | {mode: "direct"}
+  | {mode: "refundable"}
+  | {mode: "escrow"; claimAfterSeconds: bigint; expireAfterSeconds: bigint; arbiter?: Address};
+
+/** What the payer needs to act on an escrow; anyone may submit it (use a relayer or fresh address). */
+export interface EscrowAction {
+  id: bigint;
+  record: PaymentRecordView["record"];
+  secret: Hex;
+  otherHash: Hex;
 }
 
 /** Who submits, and what they charge. Fee is paid from the spent notes, inside the proof. */
@@ -210,13 +238,65 @@ export class ShieldedWallet {
   // -------------------------------------------------------------------------
 
   /** Pay a public address (merchant, or yourself = withdraw). Merchant gets `amount` in this tx. */
-  async preparePayment(p: {token: Address; amount: bigint; recipient: Address; requestId?: Hex; deadline?: bigint} & Partial<FeeSpec>): Promise<Bundle> {
+  async preparePayment(
+    p: {token: Address; amount: bigint; recipient: Address; requestId?: Hex; deadline?: bigint; terms?: PaymentTerms} & Partial<FeeSpec>,
+  ): Promise<Bundle> {
     if (p.amount <= 0n) throw new Error("amount must be > 0");
-    return this.buildTransact({
+    const common = {
       token: p.token, publicAmount: p.amount, recipient: p.recipient, fee: p.fee ?? 0n,
       feeRecipient: p.feeRecipient ?? ZERO_ADDRESS, requestId: p.requestId ?? ZERO_BYTES32, deadline: p.deadline,
-      kind: KIND.TRANSACT,
-    });
+    };
+    if (!p.terms || p.terms.mode === "direct") return this.buildTransact({...common, kind: KIND.TRANSACT});
+    // refundable / escrow: deferred-mode transact whose out1 is our refund-note core
+    return this.buildTransact({...common, kind: KIND.PAY, deferredOut: {token: p.token}, terms: p.terms});
+  }
+
+  /** Our refundable/escrowed payments (recognised by decrypting their refund ciphertext). */
+  payments(): PaymentRecordView[] {
+    const mine: PaymentRecordView[] = [];
+    for (const r of this.opts.sync.payments.values()) {
+      if (r.encryptedRefund.length <= 2) continue;
+      const note = tryDecryptCore(Buffer.from(r.encryptedRefund.slice(2), "hex"), this.keys, r.record.refundCore);
+      if (note) mine.push(r);
+    }
+    return mine;
+  }
+
+  /** Release one of our escrows to the merchant (submit with submitEscrowRelease, from any address). */
+  escrowRelease(id: bigint): EscrowAction {
+    const r = this.ownPayment(id);
+    const sec = escrowSecrets(this.keys.sk, r.record.refundCore);
+    return {id, record: r.record, secret: sec.release, otherHash: sec.disputeHash};
+  }
+
+  /** Dispute one of our escrows (needs an arbiter; before claimableAt). */
+  escrowDispute(id: bigint): EscrowAction {
+    const r = this.ownPayment(id);
+    const sec = escrowSecrets(this.keys.sk, r.record.refundCore);
+    return {id, record: r.record, secret: sec.dispute, otherHash: sec.releaseHash};
+  }
+
+  private ownPayment(id: bigint): PaymentRecordView {
+    const r = this.payments().find((x) => x.id === id);
+    if (!r) throw new Error(`payment ${id} is not ours (or not synced yet)`);
+    if (r.record.mode !== PAY_MODE.ESCROW) throw new Error("not an escrow payment");
+    return r;
+  }
+
+  /** PayOptions for `terms`, given our refund core and its ciphertext. */
+  protected async payOptions(terms: PaymentTerms | undefined, refundCore: bigint, encryptedRefund: Hex): Promise<PayOptions> {
+    if (!terms || terms.mode === "direct") return DIRECT_PAYMENT;
+    if (terms.mode === "refundable") return {...DIRECT_PAYMENT, mode: PAY_MODE.REFUNDABLE, encryptedRefund};
+    if (terms.expireAfterSeconds <= terms.claimAfterSeconds) throw new Error("escrow must expire after it becomes claimable");
+    const now = await this.now();
+    return {
+      mode: PAY_MODE.ESCROW,
+      arbiter: terms.arbiter ?? ZERO_ADDRESS,
+      claimableAt: now + terms.claimAfterSeconds,
+      expiresAt: now + terms.expireAfterSeconds,
+      payerAuth: escrowSecrets(this.keys.sk, refundCore).payerAuth,
+      encryptedRefund,
+    };
   }
 
   /** Private transfer to another shielded address. Nothing about it is public except that a spend happened. */
@@ -268,6 +348,7 @@ export class ShieldedWallet {
     extra?: Hex;
     privateOut?: {amount: bigint; to: ShieldedAddress; policy: bigint};
     deferredOut?: {token: Address};
+    terms?: PaymentTerms;
   }): Promise<Bundle> {
     await this.refresh();
     const policyId = this.policyId;
@@ -302,14 +383,16 @@ export class ShieldedWallet {
       deferred ? noteCore(label, noteInner(out1.owner, out1.blinding, out1.policy)) : commitmentOf(out1),
     ] as const;
 
+    // pay(): the refund note's ciphertext travels in PayOptions (emitted by the book), not ext
+    const opts = p.terms ? await this.payOptions(p.terms, outCommitments[1], hex(encryptNote(out1, self))) : undefined;
     const ext: ExtData = {
       feeRecipient: p.feeRecipient,
       requestId: p.requestId,
       deadline: p.deadline ?? (await this.now()) + 600n,
       encryptedOutput0: hex(encryptNote(out0, self)),
-      encryptedOutput1: hex(encryptNote(out1, out1To)),
+      encryptedOutput1: opts ? "0x" : hex(encryptNote(out1, out1To)),
     };
-    const context = computeContext(this.opts.chainId, this.opts.pool, p.kind, ext, p.extra);
+    const context = computeContext(this.opts.chainId, this.opts.pool, p.kind, ext, opts ? payExtra(opts) : p.extra);
 
     const {padded, nfs} = this.padInputs(inputs, label, tokenF, policyId);
     const root = this.opts.sync.root;
@@ -333,15 +416,12 @@ export class ShieldedWallet {
       out_policies: [s(out0.policy), s(out1.policy)],
     };
     const proof = await this.opts.prover.prove("transact", witness);
-    return {
-      kind: "transact",
-      proof: proof.proof,
-      inputs: {
-        root, aspRoot: asp.root, nullifiers: [nfs[0]!, nfs[1]!], outCommitments,
-        publicAmount: p.publicAmount, fee: p.fee, token: p.token, recipient: p.recipient,
-      },
-      ext,
+    const pub: TransactInputs = {
+      root, aspRoot: asp.root, nullifiers: [nfs[0]!, nfs[1]!], outCommitments,
+      publicAmount: p.publicAmount, fee: p.fee, token: p.token, recipient: p.recipient,
     };
+    if (opts) return {kind: "pay", proof: proof.proof, inputs: pub, ext, opts};
+    return {kind: "transact", proof: proof.proof, inputs: pub, ext};
   }
 
   protected selectInputs(token: Address, need: bigint, policy: bigint): (OwnedNote & {note: Note})[] {
@@ -411,7 +491,8 @@ export class AgentWallet extends ShieldedWallet {
    * to show that the CIRCUIT itself refuses: the client is a convenience, not the enforcement).
    */
   async preparePolicyPayment(
-    p: {amount: bigint; recipient: Address; requestId?: Hex; deadline?: bigint; unsafeSkipPolicyPrecheck?: boolean} & Partial<FeeSpec>,
+    p: {amount: bigint; recipient: Address; requestId?: Hex; deadline?: bigint; terms?: PaymentTerms; unsafeSkipPolicyPrecheck?: boolean} &
+      Partial<FeeSpec>,
   ): Promise<Bundle> {
     const policy = this.opts.policy!;
     const token = fieldToAddress(policy.token);
@@ -466,6 +547,11 @@ export class AgentWallet extends ShieldedWallet {
       kind: "budget", remaining: remaining < 0n ? 0n : remaining, period: periodNow, owner: self.owner,
       blinding: randomField(), policy: this.policyId,
     };
+    // Refund slot: a policy-bound note for us (the circuit forces owner, policy and label), in
+    // case the merchant refunds or an escrow comes back. Amount is set onchain.
+    const refundNote = newNote({amount: 0n, token: tokenF, label, owner: self.owner, policy: this.policyId});
+    const refundCore = noteCore(label, noteInner(refundNote.owner, refundNote.blinding, refundNote.policy));
+    const opts = await this.payOptions(p.terms, refundCore, hex(encryptNote(refundNote, self)));
     const ext: ExtData = {
       feeRecipient: p.feeRecipient ?? ZERO_ADDRESS,
       requestId: p.requestId ?? ZERO_BYTES32,
@@ -473,7 +559,7 @@ export class AgentWallet extends ShieldedWallet {
       encryptedOutput0: hex(encryptNote(change, self)),
       encryptedOutput1: hex(encryptNote(newBudget, self)),
     };
-    const context = computeContext(this.opts.chainId, this.opts.pool, KIND.POLICY_PAY, ext);
+    const context = computeContext(this.opts.chainId, this.opts.pool, KIND.POLICY_PAY, ext, payExtra(opts));
     const padded: {note: Note; leafIndex: number; real: boolean}[] = inputs.map((n) => ({note: n.note, leafIndex: n.leafIndex, real: true}));
     while (padded.length < 2) padded.push({note: newNote({amount: 0n, token: tokenF, label, owner: self.owner, policy: this.policyId}), leafIndex: 0, real: false});
     const nfs = padded.map((n) => nullifier(this.keys.nk, commitmentOf(n.note), BigInt(n.leafIndex)));
@@ -486,6 +572,7 @@ export class AgentWallet extends ShieldedWallet {
     const proof = await this.opts.prover.prove("policy_pay", {
       root: s(root), asp_root: s(asp.root), vendor_root: s(vendor.root), vendor_checked: checkVendor, nullifiers: arr(nfs),
       budget_nullifier: s(budget.nullifier), change_commitment: s(changeCm), new_budget_commitment: s(newBudgetCm),
+      refund_core: s(refundCore),
       amount: s(p.amount), fee: s(fee), token: s(tokenF), recipient: s(addressToField(p.recipient)), now: s(now),
       context: s(context),
       sk: s(this.keys.sk), label: s(label), asp_index: s(asp.index), asp_path: arr(asp.path),
@@ -498,17 +585,18 @@ export class AgentWallet extends ShieldedWallet {
       budget_index: s(budget.leafIndex), budget_path: arr(tree.path(budget.leafIndex)),
       vendor_level: s(vendor.level), vendor_categories: s(vendor.categories), vendor_expiry: s(vendor.expiry),
       vendor_index: s(vendor.leafIndex), vendor_path: arr(vendor.path),
-      change_blinding: s(change.blinding), new_budget_blinding: s(newBudget.blinding),
+      change_blinding: s(change.blinding), new_budget_blinding: s(newBudget.blinding), refund_blinding: s(refundNote.blinding),
     });
     return {
       kind: "policyPay",
       proof: proof.proof,
       inputs: {
         root, aspRoot: asp.root, vendorRoot: vendor.root, vendorChecked: checkVendor, nullifiers: [nfs[0]!, nfs[1]!], budgetNullifier: budget.nullifier,
-        changeCommitment: changeCm, newBudgetCommitment: newBudgetCm, amount: p.amount, fee, token,
+        changeCommitment: changeCm, newBudgetCommitment: newBudgetCm, refundCore, amount: p.amount, fee, token,
         recipient: p.recipient, timestamp: now,
       },
       ext,
+      opts,
     };
   }
 }

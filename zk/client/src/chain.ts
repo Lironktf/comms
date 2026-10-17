@@ -11,6 +11,28 @@ export interface LeafRecord {
   blockNumber: bigint;
 }
 
+/** A refundable/escrowed payment, as recorded by the pool's PaymentBook. */
+export interface PaymentRecordView {
+  id: bigint;
+  requestId: Hex;
+  record: {
+    mode: number;
+    vendorChecked: boolean;
+    merchant: Address;
+    token: Address;
+    amount: bigint;
+    refundCore: bigint;
+    arbiter: Address;
+    claimableAt: bigint;
+    expiresAt: bigint;
+    payerAuth: Hex;
+  };
+  encryptedRefund: Hex;
+  status: "open" | "disputed" | "closed";
+  refunded: bigint;
+  txHash: Hex;
+}
+
 export interface DepositRecord {
   label: bigint;
   depositor: Address;
@@ -30,6 +52,12 @@ const EV = {
     "event TransferAuthorized(bytes32 indexed digest, address indexed to, address indexed token, uint256 value, uint256 validBefore, bytes32 nonce, uint256 refundCore, bytes encryptedRefund)",
   ),
   reclaimed: parseAbiItem("event AuthorizationReclaimed(bytes32 indexed digest, uint256 commitment, uint256 leafIndex)"),
+  recorded: parseAbiItem(
+    "event PaymentRecorded(uint256 indexed id, address indexed merchant, bytes32 indexed requestId, (uint8 mode, bool vendorChecked, address merchant, address token, uint128 amount, uint256 refundCore, address arbiter, uint64 claimableAt, uint64 expiresAt, bytes32 payerAuth) record, bytes encryptedRefund)",
+  ),
+  disputed: parseAbiItem("event EscrowDisputed(uint256 indexed id)"),
+  closed: parseAbiItem("event EscrowClosed(uint256 indexed id, uint256 toMerchant, uint256 refunded)"),
+  refunded: parseAbiItem("event Refunded(uint256 indexed id, uint256 amount, uint256 commitment, uint256 leafIndex)"),
   swapped: parseAbiItem(
     "event Swapped(address indexed adapter, address indexed tokenIn, address indexed tokenOut, uint256 amountIn, uint256 amountOut, uint256 outLeafIndex)",
   ),
@@ -46,6 +74,9 @@ export class PoolSync {
   readonly leaves: LeafRecord[] = [];
   readonly nullifiers = new Set<bigint>();
   readonly deposits = new Map<bigint, DepositRecord>();
+  /** refundable/escrowed payments by id (= first nullifier) */
+  readonly payments = new Map<bigint, PaymentRecordView>();
+  private book: Address | null = null;
   readonly authorizations = new Map<Hex, {to: Address; token: Address; value: bigint; validBefore: bigint; nonce: Hex; refundCore: bigint; encryptedRefund: Hex; reclaimed: boolean}>();
   private lastBlock: bigint;
 
@@ -67,6 +98,43 @@ export class PoolSync {
     const latest = await this.client.getBlockNumber({cacheTime: 0});
     if (latest <= this.lastBlock) return;
     const range = {address: this.pool, fromBlock: this.lastBlock + 1n, toBlock: latest} as const;
+    if (!this.book) {
+      this.book = (await this.client.readContract({
+        address: this.pool, abi: [parseAbiItem("function paymentBook() view returns (address)")], functionName: "paymentBook",
+      })) as Address;
+    }
+    const bookRange = {...range, address: this.book};
+    const [recs, disps, closes, refs] = await Promise.all([
+      this.client.getLogs({...bookRange, event: EV.recorded}),
+      this.client.getLogs({...bookRange, event: EV.disputed}),
+      this.client.getLogs({...bookRange, event: EV.closed}),
+      this.client.getLogs({...range, event: EV.refunded}),
+    ]);
+    for (const l of recs) {
+      const a = l.args;
+      this.payments.set(a.id!, {
+        id: a.id!, requestId: a.requestId!, record: {...a.record!, amount: BigInt(a.record!.amount)},
+        encryptedRefund: a.encryptedRefund!, status: "open", refunded: 0n, txHash: l.transactionHash!,
+      });
+    }
+    for (const l of disps) {
+      const p = this.payments.get(l.args.id!);
+      if (p) p.status = "disputed";
+    }
+    for (const l of closes) {
+      const p = this.payments.get(l.args.id!);
+      if (p) p.status = "closed";
+    }
+    const refundByLeaf = new Map<number, {id: bigint; amount: bigint}>();
+    for (const l of refs) {
+      refundByLeaf.set(Number(l.args.leafIndex!), {id: l.args.id!, amount: l.args.amount!});
+      const p = this.payments.get(l.args.id!);
+      if (p) {
+        p.refunded += l.args.amount!;
+        if (p.record.mode === 1 && p.refunded === p.record.amount) p.status = "closed";
+      }
+    }
+
     const [cms, nfs, deps, auths, recl, swaps] = await Promise.all([
       this.client.getLogs({...range, event: EV.commitment}),
       this.client.getLogs({...range, event: EV.nullifier}),
@@ -107,6 +175,13 @@ export class PoolSync {
       if (sw) {
         hints.amount = sw.amountOut!;
         hints.token = BigInt(sw.tokenOut!);
+      }
+      const rf = refundByLeaf.get(leafIndex);
+      const pay = rf && this.payments.get(rf.id);
+      if (rf && pay) {
+        hints.amount = rf.amount;
+        hints.token = BigInt(pay.record.token);
+        encrypted = pay.encryptedRefund;
       }
       const digest = reclaimByLeaf.get(leafIndex);
       if (digest) {
