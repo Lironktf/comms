@@ -43,12 +43,23 @@ forge script script/Deploy.s.sol --rpc-url $BASE_SEPOLIA_RPC_URL --broadcast \
 # writes zk/contracts/deployments/84532.json
 ```
 
-Gas, measured on local anvil (`broadcast/Deploy.s.sol/31337/run-latest.json`, commit dca4509):
-Poseidon2 3,408,310 · TransactVerifier 3,667,707 · PolicyPayVerifier 3,736,927 ·
-BudgetInitVerifier 3,575,693 · RagequitVerifier 3,621,641 · VendorTree 1,223,532 ·
-AssociationSetRegistry 483,541 · ShieldedPool 4,497,486 · token config ~50k each.
-On Base Sepolia, without registries or mocks, that is **≈ 24.4M gas** in total, spread over
-several transactions (the largest single deployment is the pool at 4.5M gas).
+Gas, measured on local anvil (`broadcast/Deploy.s.sol/31337/run-latest.json`, 2026-10-17):
+Poseidon2 3,408,310 · TransactVerifier 3,667,503 · PolicyPayVerifier 3,736,699 ·
+BudgetInitVerifier 3,575,273 · RagequitVerifier 3,621,641 · VendorTree 1,223,532 ·
+AssociationSetRegistry 483,541 · ShieldedPool **including its PaymentBook** 6,621,262 ·
+token config ~50k each.
+- On Base Sepolia, without registries, mocks or the swap adapter, that is **≈ 26.4M gas** in
+  total, spread over several transactions. The largest single one is the pool + book at 6.6M.
+- At the Base gas price read on 2026-10-17 (0.006 gwei via `cast gas-price`), that is about
+  0.00016 ETH. Have ~0.001 ETH on the deployer.
+- `deployments/84532.json` now also lists `paymentBook`.
+
+Funding the deployer: the Grayr admin address that deployed the registries
+(`0x009184F4…B810`) held 0.04 Base Sepolia ETH on 2026-10-17. Send some to your deploy key:
+
+```bash
+cast send <deployer address> --value 0.005ether --rpc-url https://sepolia.base.org --account <grayr admin keystore>
+```
 
 ### Post-deploy (also broadcasts)
 
