@@ -57,13 +57,13 @@ export function aggregateDigest(publicInputs: readonly (readonly Hex[])[]): bigi
   const n = publicInputs.length;
   if (!AGGREGATE_SIZES.includes(n as AggregateSize)) throw new Error(`aggregate size must be 2, 4 or 8, got ${n}`);
   let level: bigint[] = [];
-  for (let i = 0; i < n; i += 2) level.push(digestWords([...publicInputs[i], ...publicInputs[i + 1]]));
+  for (let i = 0; i < n; i += 2) level.push(digestWords([...publicInputs[i]!, ...publicInputs[i + 1]!]));
   while (level.length > 1) {
     const up: bigint[] = [];
-    for (let i = 0; i < level.length; i += 2) up.push(digestWords([level[i], level[i + 1]]));
+    for (let i = 0; i < level.length; i += 2) up.push(digestWords([level[i]!, level[i + 1]!]));
     level = up;
   }
-  return level[0];
+  return level[0]!;
 }
 
 const fields = (bytes: Uint8Array): Hex[] => {
@@ -142,11 +142,13 @@ export class Aggregator {
     // level 0: aggregate_2 over pairs of payments
     let level: {proof: Uint8Array; digest: bigint}[] = [];
     for (let i = 0; i < n; i += 2) {
-      const pis = [inner[i].publicInputs, inner[i + 1].publicInputs];
-      const digest = digestWords([...pis[0], ...pis[1]]);
+      const a = inner[i]!;
+      const b = inner[i + 1]!;
+      const pis = [a.publicInputs, b.publicInputs];
+      const digest = digestWords([...a.publicInputs, ...b.publicInputs]);
       const {proof, ms} = await this.prove(
         "aggregate_2",
-        {vk: tx.vk, key_hash: tx.hash, proofs: [fields(hexBytes(inner[i].proof)), fields(hexBytes(inner[i + 1].proof))], public_inputs: pis, payments_digest: toHex(digest)},
+        {vk: tx.vk, key_hash: tx.hash, proofs: [fields(hexBytes(a.proof)), fields(hexBytes(b.proof))], public_inputs: pis, payments_digest: toHex(digest)},
         n === 2 ? "evm" : "noir-recursive",
       );
       steps.push({circuit: "aggregate_2", ms});
@@ -157,10 +159,12 @@ export class Aggregator {
       const child = this.childKey(`aggregate_${size / 2}`);
       const up: typeof level = [];
       for (let i = 0; i < level.length; i += 2) {
-        const digest = digestWords([level[i].digest, level[i + 1].digest]);
+        const l = level[i]!;
+        const r = level[i + 1]!;
+        const digest = digestWords([l.digest, r.digest]);
         const {proof, ms} = await this.prove(
           `aggregate_${size}`,
-          {vk: child.vk, key_hash: child.hash, proofs: [fields(level[i].proof), fields(level[i + 1].proof)], child_digests: [toHex(level[i].digest), toHex(level[i + 1].digest)], payments_digest: toHex(digest)},
+          {vk: child.vk, key_hash: child.hash, proofs: [fields(l.proof), fields(r.proof)], child_digests: [toHex(l.digest), toHex(r.digest)], payments_digest: toHex(digest)},
           size === n ? "evm" : "noir-recursive",
         );
         steps.push({circuit: `aggregate_${size}`, ms});
@@ -168,7 +172,8 @@ export class Aggregator {
       }
       level = up;
     }
-    return {proof: toHex(level[0].proof), digest: level[0].digest, steps, totalMs: performance.now() - t0};
+    const root = level[0]!;
+    return {proof: toHex(root.proof), digest: root.digest, steps, totalMs: performance.now() - t0};
   }
 
   async destroy(): Promise<void> {
