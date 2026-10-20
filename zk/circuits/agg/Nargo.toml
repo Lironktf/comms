@@ -1,0 +1,6 @@
+[package]
+name = "agg"
+type = "lib"
+authors = ["Lironktf"]
+
+[dependencies]

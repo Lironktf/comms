@@ -1,0 +1,7 @@
+[package]
+name = "aggregate_4"
+type = "bin"
+authors = ["Lironktf"]
+
+[dependencies]
+agg = { path = "../agg" }

@@ -5,3 +5,4 @@ contracts/broadcast/
 contracts/node_modules/
 contracts/deployments/anvil.json
 client/dist/
+circuits/aggregate_*/Prover.toml
