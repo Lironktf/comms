@@ -5,21 +5,18 @@ The zkTLS proof-of-delivery part below is still research.)
 
 ## Recursive aggregation (biggest lever for micropayments)
 
-Today each payment costs ~666k gas for its own UltraHonk verification. Instead:
+**Rung 1 is built** (local anvil only): see aggregation.md and benchmarks.md. It uses a
+binary tree of 2^21 circuits over transact proofs, `settleAggregated` and an aggregating relayer.
+At N=8 that is 326k L2 gas and 2.6 KB of calldata per payment, with 225 s of aggregator proving.
 
-- An aggregator proves *"I verified N transact proofs"* in one Noir circuit, using the stdlib's
-  in-circuit verifier. Verified present in nargo 1.0.0-beta.25:
-  `std::verify_proof_with_type` (found in the nargo binary's embedded stdlib).
-  - The inner proofs must use a recursion-friendly (Poseidon2) transcript, not keccak, so the
-    payment circuits would need a second proving target.
-  - Exact flags: check bb 5.2.1's docs before building.
-- The circuit outputs the concatenated public inputs, or a hash of them that the contract checks.
-- On-chain: one verification (~0.7M gas) plus N × (nullifier writes + transfers), with tree
-  insertion batched as today.
-- **Cost:** the aggregator's proving time is roughly N × the inner verifier cost (~500k+ gates
-  per recursive verification), so this suits facilitators that batch.
-- **Note:** the bb 5.2.1 patch concerned native verification of recursive pairing accumulators,
-  so pin a version that includes it.
+Next rungs:
+- **Agent payments.** A `policy_pay` leaf circuit, so agent payments aggregate too.
+- **Proving latency.**
+  - Prove leaves as payments arrive, so only log2(N) levels sit on the critical path.
+  - Prove sibling nodes in parallel on separate machines.
+- **Larger N.** 16 or 32 payments: one more tree level each. Gas per payment keeps falling
+  toward the per-payment floor (checks, nullifier writes, leaves, events).
+- **Measure L1 data on Base Sepolia.** benchmarks.md has only an estimate.
 
 ## Shielded receiving (hidden merchant revenue)
 
