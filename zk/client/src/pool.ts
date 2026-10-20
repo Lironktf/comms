@@ -1,5 +1,6 @@
-import type {Address, Hex, PublicClient, WalletClient} from "viem";
-import {paymentBookAbi, shieldedPoolAbi} from "./abi.js";
+import {toHex, type Address, type Hex, type PublicClient, type WalletClient} from "viem";
+import {aggregationModuleAbi, paymentBookAbi, shieldedPoolAbi} from "./abi.js";
+import {computeContext, DIRECT_PAYMENT, KIND, payExtra} from "./context.js";
 import type {PaymentRecordView} from "./chain.js";
 import type {Bundle, EscrowAction, RagequitBundle} from "./wallet.js";
 
@@ -36,6 +37,53 @@ export function batchCall(bundles: Bundle[]): {functionName: string; args: reado
     else throw new Error(`a ${b.kind} bundle can't be batched`);
   }
   return {functionName: "batch", args: [ts, ps, qs]};
+}
+
+// ---------------------------------------------------------------------------
+// Recursive aggregation (settleAggregated, docs/aggregation.md)
+// ---------------------------------------------------------------------------
+
+export type AggregatableBundle = Extract<Bundle, {kind: "transact" | "pay"}> & {recursiveProof: Hex};
+
+export function isAggregatable(b: Bundle): b is AggregatableBundle {
+  return (b.kind === "transact" || b.kind === "pay") && typeof b.recursiveProof === "string";
+}
+
+/** The 12 transact public inputs of a transact/pay bundle, exactly as the pool builds them
+ *  (ShieldedPoolCore._transactPub): what its recursion proof must verify against. */
+export function transactPublicInputs(b: Extract<Bundle, {kind: "transact" | "pay"}>, chainId: bigint, pool: Address): Hex[] {
+  const deferred = b.kind === "pay";
+  const context = deferred
+    ? computeContext(chainId, pool, KIND.PAY, b.ext, payExtra(b.opts))
+    : computeContext(chainId, pool, KIND.TRANSACT, b.ext);
+  const i = b.inputs;
+  return [
+    i.root, i.aspRoot, i.nullifiers[0], i.nullifiers[1], i.outCommitments[0], i.outCommitments[1], i.publicAmount, i.fee,
+    BigInt(i.token), BigInt(i.recipient), deferred ? 1n : 0n, context,
+  ].map((x) => toHex(x, {size: 32}));
+}
+
+/** settleAggregated(proof, payments): runs in the pool's AggregationModule (via its fallback). */
+export function aggregatedCall(bundles: AggregatableBundle[], proof: Hex): {functionName: "settleAggregated"; args: readonly unknown[]} {
+  const payments = bundles.map((b) => ({
+    inputs: b.inputs, ext: b.ext, deferred: b.kind === "pay", opts: b.kind === "pay" ? b.opts : DIRECT_PAYMENT,
+  }));
+  return {functionName: "settleAggregated", args: [proof, payments]};
+}
+
+export async function simulateAggregated(client: PublicClient, pool: Address, bundles: AggregatableBundle[], proof: Hex, from?: Address): Promise<void> {
+  const {functionName, args} = aggregatedCall(bundles, proof);
+  await client.simulateContract({address: pool, abi: aggregationModuleAbi, functionName, args: args as never, account: from});
+}
+
+export async function submitAggregated(wallet: WalletClient, client: PublicClient, pool: Address, bundles: AggregatableBundle[], proof: Hex): Promise<{hash: Hex; gasUsed: bigint}> {
+  const {functionName, args} = aggregatedCall(bundles, proof);
+  const hash = await wallet.writeContract({
+    address: pool, abi: aggregationModuleAbi, functionName, args: args as never, account: wallet.account!, chain: wallet.chain,
+  });
+  const r = await client.waitForTransactionReceipt({hash});
+  if (r.status !== "success") throw new Error(`pool.settleAggregated reverted (${hash})`);
+  return {hash, gasUsed: r.gasUsed};
 }
 
 /** eth_call the spend: checks roots, nullifiers, deadline AND the proof onchain, for free. */

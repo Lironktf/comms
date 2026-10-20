@@ -21,6 +21,10 @@ export function parseBundle(x: unknown): Bundle {
   const b = fromWire<Bundle>(x);
   if (!b || typeof b !== "object" || !KINDS.has((b as {kind: string}).kind)) throw new Error("bad bundle kind");
   if (typeof b.proof !== "string" || !/^0x[0-9a-fA-F]+$/.test(b.proof)) throw new Error("bad proof");
+  const rp = (b as {recursiveProof?: unknown}).recursiveProof;
+  if (rp !== undefined && (typeof rp !== "string" || !/^0x[0-9a-fA-F]+$/.test(rp) || (b.kind !== "transact" && b.kind !== "pay"))) {
+    throw new Error("bad recursiveProof");
+  }
   if (!b.ext || typeof b.ext.deadline !== "bigint") throw new Error("bad ext");
   return b;
 }
