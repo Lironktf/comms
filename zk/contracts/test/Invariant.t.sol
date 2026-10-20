@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 import {Test} from "forge-std/Test.sol";
 import {ShieldedPool} from "../src/ShieldedPool.sol";
 import {ShieldedPoolCore} from "../src/ShieldedPoolCore.sol";
+import {AggregationModule} from "../src/AggregationModule.sol";
 import {PaymentBook, PaymentRecord} from "../src/PaymentBook.sol";
 import {MockUSDC} from "../src/mocks/MockUSDC.sol";
 import {SoundMockVerifier} from "./helpers/SoundMockVerifier.sol";
@@ -17,6 +18,7 @@ contract PoolHandler is Test {
     MockUSDC immutable usdc;
     SoundMockVerifier immutable vTransact;
     SoundMockVerifier immutable vRagequit;
+    SoundMockVerifier[3] vAgg;
 
     struct GhostNote {
         uint256 amount;
@@ -29,6 +31,7 @@ contract PoolHandler is Test {
     uint256 public pendingAuthValue;
     uint256 public successfulReplays; // MUST stay 0
     uint256 public paidOut;
+    uint256 public aggregatedPayments; // settled through settleAggregated
     uint256 nonce = 1;
     mapping(uint256 => uint256) noteNullifier;
     bytes32[] public pendingDigests;
@@ -52,11 +55,12 @@ contract PoolHandler is Test {
     bytes32 constant RELEASE = keccak256("r");
     bytes32 constant DISPUTE = keccak256("d");
 
-    constructor(ShieldedPool p, MockUSDC u, SoundMockVerifier vt, SoundMockVerifier vr) {
+    constructor(ShieldedPool p, MockUSDC u, SoundMockVerifier vt, SoundMockVerifier vr, SoundMockVerifier[3] memory va) {
         pool = p;
         usdc = u;
         vTransact = vt;
         vRagequit = vr;
+        vAgg = va;
     }
 
     function _pub(ShieldedPoolCore.TransactInputs memory t, bool deferred, uint256 ctx) internal pure returns (bytes32[] memory pub) {
@@ -136,6 +140,65 @@ contract PoolHandler is Test {
         paidOut += pay + fee;
         _newNote(change, g.label);
     }
+
+    /// Spend 2, 4 or 8 distinct notes through ONE aggregate proof (settleAggregated): each pays
+    /// part of its value publicly, a fee, and keeps change as a new note.
+    function spendAggregated(uint256 seed, uint256 sizeSeed, uint256 payBps) external {
+        if (notes.length == 0) return;
+        uint256[] memory idx = new uint256[](8);
+        uint256 found;
+        for (uint256 k; k < notes.length && found < 8; ++k) {
+            uint256 i = (seed % notes.length + k) % notes.length;
+            if (!notes[i].spent) idx[found++] = i;
+        }
+        // the largest supported size (2, 4, 8) not above both the wish and what is available
+        uint256 n = 2 << (sizeSeed % 3);
+        while (n > found && n > 2) n /= 2;
+        if (found < n) return;
+        payBps = bound(payBps, 0, 10_000);
+        AggregationModule.AggPayment[] memory ps = new AggregationModule.AggPayment[](n);
+        uint256 lvl;
+        uint256[] memory level = new uint256[](n / 2);
+        bytes32[] memory left;
+        for (uint256 j; j < n; ++j) {
+            GhostNote storage g = notes[idx[j]];
+            uint256 pay = g.amount * payBps / 10_000;
+            uint256 fee = (g.amount - pay) / 100;
+            ShieldedPoolCore.TransactInputs memory t;
+            t.root = pool.root();
+            t.aspRoot = 777;
+            t.nullifiers = [noteNullifier[idx[j]], uint256(keccak256(abi.encode("dummy-a", nonce++))) % 1e70];
+            t.outCommitments = [nonce++, nonce++];
+            t.publicAmount = pay;
+            t.fee = fee;
+            t.token = address(usdc);
+            t.recipient = pay == 0 ? address(0) : address(0xBEEF);
+            ps[j].inputs = t;
+            ps[j].ext = _ext();
+            bytes32[] memory pub = _pub(t, false, pool.computeContext(1, ps[j].ext, 0));
+            if (j % 2 == 0) left = pub;
+            else level[j / 2] = uint256(keccak256(abi.encodePacked(left, pub))) % FIELD_;
+        }
+        for (uint256 w = n / 2; w > 1; w /= 2) {
+            for (uint256 i; i < w; i += 2) level[i / 2] = uint256(keccak256(abi.encodePacked(level[i], level[i + 1]))) % FIELD_;
+            ++lvl;
+        }
+        bytes32[] memory root = new bytes32[](1);
+        root[0] = bytes32(level[0]);
+        vAgg[lvl].declareTrue(root);
+        AggregationModule(address(pool)).settleAggregated("", ps);
+        aggregatedPayments += n;
+        for (uint256 j; j < n; ++j) {
+            GhostNote storage g = notes[idx[j]];
+            g.spent = true;
+            unspentValue -= g.amount;
+            uint256 out = ps[j].inputs.publicAmount + ps[j].inputs.fee;
+            paidOut += out;
+            _newNote(g.amount - out, g.label);
+        }
+    }
+
+    uint256 constant FIELD_ = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
 
     /// Try to re-spend an already spent note (fresh outputs, current root). Must revert.
     function replay(uint256 seed) external {
@@ -329,7 +392,7 @@ contract PoolInvariantTest is PoolFixture {
 
     function setUp() public {
         setUpPool();
-        handler = new PoolHandler(pool, usdc, vTransact, vRagequit);
+        handler = new PoolHandler(pool, usdc, vTransact, vRagequit, vAgg);
         targetContract(address(handler));
     }
 
@@ -346,6 +409,11 @@ contract PoolInvariantTest is PoolFixture {
         assertEq(handler.successfulOverRefunds(), 0);
     }
 
+    /// The aggregated path is exercised (not just early returns for lack of notes).
+    function afterInvariant() public {
+        emit log_named_uint("aggregated payments this run", handler.aggregatedPayments());
+    }
+
     function invariant_noReplayEverSucceeds() public view {
         assertEq(handler.successfulReplays(), 0);
     }
@@ -355,3 +423,4 @@ contract PoolInvariantTest is PoolFixture {
         assertEq(pool.nextIndex() % 2, 0, "every insertion is a 2-leaf pair");
     }
 }
+
