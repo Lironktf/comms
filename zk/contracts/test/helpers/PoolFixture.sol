@@ -7,6 +7,7 @@ import {VendorRegistry} from "@grayr/VendorRegistry.sol";
 import {AttestationRegistry} from "@grayr/AttestationRegistry.sol";
 import {IVendorRegistry} from "@grayr/interfaces/IVendorRegistry.sol";
 import {ShieldedPool} from "../../src/ShieldedPool.sol";
+import {ShieldedPoolCore} from "../../src/ShieldedPoolCore.sol";
 import {VendorTree} from "../../src/VendorTree.sol";
 import {AssociationSetRegistry} from "../../src/AssociationSetRegistry.sol";
 import {IHonkVerifier} from "../../src/interfaces/IHonkVerifier.sol";
@@ -27,6 +28,8 @@ abstract contract PoolFixture is Test {
     SoundMockVerifier internal vPolicy;
     SoundMockVerifier internal vBudget;
     SoundMockVerifier internal vRagequit;
+    /// aggregate roots for 2, 4, 8 payments (docs/aggregation.md)
+    SoundMockVerifier[3] internal vAgg;
     VendorRegistry internal vendors;
     AttestationRegistry internal attestations;
     VendorTree internal vendorTree;
@@ -44,6 +47,7 @@ abstract contract PoolFixture is Test {
         vPolicy = new SoundMockVerifier();
         vBudget = new SoundMockVerifier();
         vRagequit = new SoundMockVerifier();
+        for (uint256 i; i < 3; ++i) vAgg[i] = new SoundMockVerifier();
         vendors = VendorRegistry(
             address(new ERC1967Proxy(address(new VendorRegistry()), abi.encodeCall(VendorRegistry.initialize, (admin))))
         );
@@ -66,14 +70,15 @@ abstract contract PoolFixture is Test {
             IAssociationSet(address(asp)),
             IVendorTree(address(vendorTree)),
             p2,
-            admin
+            admin,
+            [IHonkVerifier(address(vAgg[0])), IHonkVerifier(address(vAgg[1])), IHonkVerifier(address(vAgg[2]))]
         );
         usdc = new MockUSDC();
         pool.configureToken(address(usdc), true, true, 1_000_000e6);
         asp.publishRoot(777, "test");
     }
 
-    function ext(address feeRecipient, bytes32 requestId) internal view returns (ShieldedPool.ExtData memory e) {
+    function ext(address feeRecipient, bytes32 requestId) internal view returns (ShieldedPoolCore.ExtData memory e) {
         e.feeRecipient = feeRecipient;
         e.requestId = requestId;
         e.deadline = uint64(block.timestamp + 600);
@@ -81,7 +86,7 @@ abstract contract PoolFixture is Test {
         e.encryptedOutput1 = hex"02";
     }
 
-    function transactPub(ShieldedPool.TransactInputs memory t, bool deferred, uint256 context)
+    function transactPub(ShieldedPoolCore.TransactInputs memory t, bool deferred, uint256 context)
         internal
         pure
         returns (bytes32[] memory pub)
@@ -101,7 +106,7 @@ abstract contract PoolFixture is Test {
         pub[11] = bytes32(context);
     }
 
-    function policyPub(ShieldedPool.PolicyInputs memory p, uint256 context) internal pure returns (bytes32[] memory pub) {
+    function policyPub(ShieldedPoolCore.PolicyInputs memory p, uint256 context) internal pure returns (bytes32[] memory pub) {
         pub = new bytes32[](16);
         pub[0] = bytes32(p.root);
         pub[1] = bytes32(p.aspRoot);
@@ -121,8 +126,8 @@ abstract contract PoolFixture is Test {
         pub[15] = bytes32(context);
     }
 
-    /// Mirrors ShieldedPool._payExtra: the payment options bound into `context`.
-    function payExtra(ShieldedPool.PayOptions memory o) internal pure returns (bytes32) {
+    /// Mirrors ShieldedPoolCore._payExtra: the payment options bound into `context`.
+    function payExtra(ShieldedPoolCore.PayOptions memory o) internal pure returns (bytes32) {
         return keccak256(abi.encode(o.mode, o.arbiter, o.claimableAt, o.expiresAt, o.payerAuth, keccak256(o.encryptedRefund)));
     }
 

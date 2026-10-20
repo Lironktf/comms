@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {ShieldedPool} from "../src/ShieldedPool.sol";
+import {ShieldedPoolCore} from "../src/ShieldedPoolCore.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC3009} from "../src/interfaces/IERC3009.sol";
 import {PoolFixture} from "./helpers/PoolFixture.sol";
@@ -37,7 +38,7 @@ contract PathBForkTest is PoolFixture {
         pool.deposit(address(realUsdc), 10e6, 42, "");
         vm.stopPrank();
 
-        ShieldedPool.TransactInputs memory t;
+        ShieldedPoolCore.TransactInputs memory t;
         t.root = pool.root();
         t.aspRoot = 777;
         t.nullifiers = [uint256(1), uint256(2)];
@@ -45,9 +46,9 @@ contract PathBForkTest is PoolFixture {
         t.publicAmount = 3e6;
         t.token = address(realUsdc);
         t.recipient = merchant;
-        ShieldedPool.ExtData memory e = ext(address(0), 0);
-        ShieldedPool.Authorization3009 memory a =
-            ShieldedPool.Authorization3009(block.timestamp - 1, block.timestamp + 300, keccak256("nonce-1"));
+        ShieldedPoolCore.ExtData memory e = ext(address(0), 0);
+        ShieldedPoolCore.Authorization3009 memory a =
+            ShieldedPoolCore.Authorization3009(block.timestamp - 1, block.timestamp + 300, keccak256("nonce-1"));
         vTransact.declareTrue(
             transactPub(t, true, pool.computeContext(4, e, keccak256(abi.encode(a.validAfter, a.validBefore, a.nonce))))
         );

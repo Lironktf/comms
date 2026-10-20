@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {ShieldedPool} from "../src/ShieldedPool.sol";
+import {ShieldedPoolCore} from "../src/ShieldedPoolCore.sol";
 import {PaymentBook, PaymentRecord} from "../src/PaymentBook.sol";
 import {ShieldedHashes} from "../src/libraries/ShieldedHashes.sol";
 import {PoolFixture} from "./helpers/PoolFixture.sol";
@@ -31,12 +32,12 @@ contract RefundsEscrowTest is PoolFixture {
         return keccak256(abi.encode(keccak256(abi.encode(RELEASE)), keccak256(abi.encode(DISPUTE))));
     }
 
-    function _refundable() internal pure returns (ShieldedPool.PayOptions memory o) {
+    function _refundable() internal pure returns (ShieldedPoolCore.PayOptions memory o) {
         o.mode = 1;
         o.encryptedRefund = hex"0bad";
     }
 
-    function _escrow(address arb, uint64 window, uint64 life) internal view returns (ShieldedPool.PayOptions memory o) {
+    function _escrow(address arb, uint64 window, uint64 life) internal view returns (ShieldedPoolCore.PayOptions memory o) {
         o.mode = 2;
         o.arbiter = arb;
         o.claimableAt = uint64(block.timestamp) + window;
@@ -45,7 +46,7 @@ contract RefundsEscrowTest is PoolFixture {
         o.encryptedRefund = hex"0bad";
     }
 
-    function _inputs(uint256 amount, uint256 fee) internal returns (ShieldedPool.TransactInputs memory t) {
+    function _inputs(uint256 amount, uint256 fee) internal returns (ShieldedPoolCore.TransactInputs memory t) {
         t.root = pool.root();
         t.aspRoot = 777;
         t.nullifiers = [nf++, nf++];
@@ -57,9 +58,9 @@ contract RefundsEscrowTest is PoolFixture {
     }
 
     /// pay() with a "proof" the mock verifier accepts; returns the id and the record.
-    function _pay(uint256 amount, ShieldedPool.PayOptions memory o) internal returns (uint256 id, PaymentRecord memory rec) {
-        ShieldedPool.TransactInputs memory t = _inputs(amount, 1e4);
-        ShieldedPool.ExtData memory e = ext(relayer, bytes32(uint256(9)));
+    function _pay(uint256 amount, ShieldedPoolCore.PayOptions memory o) internal returns (uint256 id, PaymentRecord memory rec) {
+        ShieldedPoolCore.TransactInputs memory t = _inputs(amount, 1e4);
+        ShieldedPoolCore.ExtData memory e = ext(relayer, bytes32(uint256(9)));
         vTransact.declareTrue(transactPub(t, true, pool.computeContext(6, e, payExtra(o))));
         pool.pay("", t, e, o);
         id = t.nullifiers[0];
@@ -124,40 +125,40 @@ contract RefundsEscrowTest is PoolFixture {
     }
 
     function test_refundable_rejectsEscrowFields_andDirectModeInPay() public {
-        ShieldedPool.PayOptions memory o = _refundable();
+        ShieldedPoolCore.PayOptions memory o = _refundable();
         o.expiresAt = uint64(block.timestamp + 100);
-        ShieldedPool.TransactInputs memory t = _inputs(1e6, 0);
-        ShieldedPool.ExtData memory e = ext(address(0), 0);
+        ShieldedPoolCore.TransactInputs memory t = _inputs(1e6, 0);
+        ShieldedPoolCore.ExtData memory e = ext(address(0), 0);
         vTransact.declareTrue(transactPub(t, true, pool.computeContext(6, e, payExtra(o))));
         vm.expectRevert(PaymentBook.BadEscrowTerms.selector);
         pool.pay("", t, e, o);
         o = _refundable();
         o.mode = 0;
-        vm.expectRevert(abi.encodeWithSelector(ShieldedPool.BadPayMode.selector, 0));
+        vm.expectRevert(abi.encodeWithSelector(ShieldedPoolCore.BadPayMode.selector, 0));
         pool.pay("", t, e, o);
         o.mode = 3;
-        vm.expectRevert(abi.encodeWithSelector(ShieldedPool.BadPayMode.selector, 3));
+        vm.expectRevert(abi.encodeWithSelector(ShieldedPoolCore.BadPayMode.selector, 3));
         pool.pay("", t, e, o);
     }
 
     function test_relayerCannotChangePaymentTerms() public {
         // the proof binds the options; a relayer turning an escrow into a refundable payment
         // (merchant paid at once) or swapping the refund ciphertext invalidates it
-        ShieldedPool.PayOptions memory o = _escrow(address(0), 1 hours, 2 hours);
-        ShieldedPool.TransactInputs memory t = _inputs(1e6, 0);
-        ShieldedPool.ExtData memory e = ext(address(0), 0);
+        ShieldedPoolCore.PayOptions memory o = _escrow(address(0), 1 hours, 2 hours);
+        ShieldedPoolCore.TransactInputs memory t = _inputs(1e6, 0);
+        ShieldedPoolCore.ExtData memory e = ext(address(0), 0);
         vTransact.declareTrue(transactPub(t, true, pool.computeContext(6, e, payExtra(o))));
-        ShieldedPool.PayOptions memory evil = _refundable();
+        ShieldedPoolCore.PayOptions memory evil = _refundable();
         evil.encryptedRefund = o.encryptedRefund;
-        vm.expectRevert(ShieldedPool.InvalidProof.selector);
+        vm.expectRevert(ShieldedPoolCore.InvalidProof.selector);
         pool.pay("", t, e, evil);
         evil = _copy(o);
         evil.encryptedRefund = hex"beef";
-        vm.expectRevert(ShieldedPool.InvalidProof.selector);
+        vm.expectRevert(ShieldedPoolCore.InvalidProof.selector);
         pool.pay("", t, e, evil);
         evil = _copy(o);
         evil.claimableAt = o.claimableAt - 1;
-        vm.expectRevert(ShieldedPool.InvalidProof.selector);
+        vm.expectRevert(ShieldedPoolCore.InvalidProof.selector);
         pool.pay("", t, e, evil);
         pool.pay("", t, e, o);
     }
@@ -264,9 +265,9 @@ contract RefundsEscrowTest is PoolFixture {
     }
 
     function test_escrow_badTerms() public {
-        ShieldedPool.TransactInputs memory t = _inputs(1e6, 0);
-        ShieldedPool.ExtData memory e = ext(address(0), 0);
-        ShieldedPool.PayOptions[4] memory bad;
+        ShieldedPoolCore.TransactInputs memory t = _inputs(1e6, 0);
+        ShieldedPoolCore.ExtData memory e = ext(address(0), 0);
+        ShieldedPoolCore.PayOptions[4] memory bad;
         bad[0] = _escrow(address(0), 1 days, 1 days); // expires == claimable
         bad[1] = _escrow(address(0), 0, 91 days); // > MAX_ESCROW_DURATION
         bad[2] = _escrow(address(0), 1 days, 2 days);
@@ -284,7 +285,7 @@ contract RefundsEscrowTest is PoolFixture {
         PaymentRecord memory rec;
         vm.expectRevert(PaymentBook.NotPool.selector);
         book.open(1, rec, 0, "");
-        vm.expectRevert(ShieldedPool.NotPaymentBook.selector);
+        vm.expectRevert(ShieldedPoolCore.NotPaymentBook.selector);
         pool.shieldRefund(1, address(usdc), 1, 1);
     }
 
@@ -305,11 +306,11 @@ contract RefundsEscrowTest is PoolFixture {
         return abi.decode(abi.encode(r), (PaymentRecord));
     }
 
-    function _copy(ShieldedPool.PayOptions memory o) internal pure returns (ShieldedPool.PayOptions memory) {
-        return abi.decode(abi.encode(o), (ShieldedPool.PayOptions));
+    function _copy(ShieldedPoolCore.PayOptions memory o) internal pure returns (ShieldedPoolCore.PayOptions memory) {
+        return abi.decode(abi.encode(o), (ShieldedPoolCore.PayOptions));
     }
 
-    function _policyInputs(uint256 amount) internal returns (ShieldedPool.PolicyInputs memory p) {
+    function _policyInputs(uint256 amount) internal returns (ShieldedPoolCore.PolicyInputs memory p) {
         p.root = pool.root();
         p.aspRoot = 777;
         p.vendorRoot = vendorTree.root();
@@ -327,9 +328,9 @@ contract RefundsEscrowTest is PoolFixture {
 
     function test_policyEscrow_suspendedVendorCannotCollect_payerGetsItBack() public {
         _registerMerchant();
-        ShieldedPool.PayOptions memory o = _escrow(address(0), 1 hours, 2 days);
-        ShieldedPool.PolicyInputs memory p = _policyInputs(2e6);
-        ShieldedPool.ExtData memory e = ext(address(0), bytes32(uint256(5)));
+        ShieldedPoolCore.PayOptions memory o = _escrow(address(0), 1 hours, 2 days);
+        ShieldedPoolCore.PolicyInputs memory p = _policyInputs(2e6);
+        ShieldedPoolCore.ExtData memory e = ext(address(0), bytes32(uint256(5)));
         vPolicy.declareTrue(policyPub(p, pool.computeContext(2, e, payExtra(o))));
         pool.payWithPolicy("", p, e, o);
         PaymentRecord memory rec = PaymentRecord({
@@ -351,12 +352,12 @@ contract RefundsEscrowTest is PoolFixture {
 
     function test_policyDirect_recordsNothing_policyRefundCoreIsPublicInput() public {
         _registerMerchant();
-        ShieldedPool.PayOptions memory o; // DIRECT
-        ShieldedPool.PolicyInputs memory p = _policyInputs(1e6);
-        ShieldedPool.ExtData memory e = ext(address(0), bytes32(uint256(6)));
+        ShieldedPoolCore.PayOptions memory o; // DIRECT
+        ShieldedPoolCore.PolicyInputs memory p = _policyInputs(1e6);
+        ShieldedPoolCore.ExtData memory e = ext(address(0), bytes32(uint256(6)));
         vPolicy.declareTrue(policyPub(p, pool.computeContext(2, e, payExtra(o))));
         p.refundCore = 0xBAD; // not what was "proven"
-        vm.expectRevert(ShieldedPool.InvalidProof.selector);
+        vm.expectRevert(ShieldedPoolCore.InvalidProof.selector);
         pool.payWithPolicy("", p, e, o);
         p.refundCore = REFUND_CORE;
         pool.payWithPolicy("", p, e, o);
@@ -370,9 +371,9 @@ contract RefundsEscrowTest is PoolFixture {
 
     function test_batch_mixesTransactPayAndPolicy_inOneTreeInsertion() public {
         _registerMerchant();
-        ShieldedPool.TransactCall[] memory ts = new ShieldedPool.TransactCall[](1);
-        ShieldedPool.PayCall[] memory ps = new ShieldedPool.PayCall[](2);
-        ShieldedPool.PolicyCall[] memory qs = new ShieldedPool.PolicyCall[](1);
+        ShieldedPoolCore.TransactCall[] memory ts = new ShieldedPoolCore.TransactCall[](1);
+        ShieldedPoolCore.PayCall[] memory ps = new ShieldedPoolCore.PayCall[](2);
+        ShieldedPoolCore.PolicyCall[] memory qs = new ShieldedPoolCore.PolicyCall[](1);
 
         ts[0].inputs = _inputs(1e6, 0);
         ts[0].inputs.outCommitments = [nf++, nf++];
@@ -402,7 +403,7 @@ contract RefundsEscrowTest is PoolFixture {
         assertTrue(book.recordHash(ps[0].inputs.nullifiers[0]) != 0);
         assertTrue(book.recordHash(ps[1].inputs.nullifiers[0]) != 0);
 
-        vm.expectRevert(ShieldedPool.EmptyBatch.selector);
-        pool.batch(new ShieldedPool.TransactCall[](0), new ShieldedPool.PayCall[](0), new ShieldedPool.PolicyCall[](0));
+        vm.expectRevert(ShieldedPoolCore.EmptyBatch.selector);
+        pool.batch(new ShieldedPoolCore.TransactCall[](0), new ShieldedPoolCore.PayCall[](0), new ShieldedPoolCore.PolicyCall[](0));
     }
 }

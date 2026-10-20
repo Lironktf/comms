@@ -3,6 +3,7 @@ pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import {ShieldedPool} from "../src/ShieldedPool.sol";
+import {ShieldedPoolCore} from "../src/ShieldedPoolCore.sol";
 import {PaymentBook, PaymentRecord} from "../src/PaymentBook.sol";
 import {MockUSDC} from "../src/mocks/MockUSDC.sol";
 import {SoundMockVerifier} from "./helpers/SoundMockVerifier.sol";
@@ -58,7 +59,7 @@ contract PoolHandler is Test {
         vRagequit = vr;
     }
 
-    function _pub(ShieldedPool.TransactInputs memory t, bool deferred, uint256 ctx) internal pure returns (bytes32[] memory pub) {
+    function _pub(ShieldedPoolCore.TransactInputs memory t, bool deferred, uint256 ctx) internal pure returns (bytes32[] memory pub) {
         pub = new bytes32[](12);
         pub[0] = bytes32(t.root);
         pub[1] = bytes32(t.aspRoot);
@@ -74,7 +75,7 @@ contract PoolHandler is Test {
         pub[11] = bytes32(ctx);
     }
 
-    function _ext() internal view returns (ShieldedPool.ExtData memory e) {
+    function _ext() internal view returns (ShieldedPoolCore.ExtData memory e) {
         e.feeRecipient = address(0xFEE);
         e.deadline = uint64(block.timestamp + 600);
     }
@@ -96,7 +97,7 @@ contract PoolHandler is Test {
         unspentValue += amount;
     }
 
-    function _payExtra(ShieldedPool.PayOptions memory o) internal pure returns (bytes32) {
+    function _payExtra(ShieldedPoolCore.PayOptions memory o) internal pure returns (bytes32) {
         return keccak256(abi.encode(o.mode, o.arbiter, o.claimableAt, o.expiresAt, o.payerAuth, keccak256(o.encryptedRefund)));
     }
 
@@ -118,7 +119,7 @@ contract PoolHandler is Test {
         pay = bound(pay, 0, g.amount);
         fee = bound(fee, 0, g.amount - pay);
         uint256 change = g.amount - pay - fee;
-        ShieldedPool.TransactInputs memory t;
+        ShieldedPoolCore.TransactInputs memory t;
         t.root = pool.root();
         t.aspRoot = 777;
         t.nullifiers = [noteNullifier[i], uint256(keccak256(abi.encode("dummy", nonce++))) % 1e70];
@@ -127,7 +128,7 @@ contract PoolHandler is Test {
         t.fee = fee;
         t.token = address(usdc);
         t.recipient = pay == 0 ? address(0) : address(0xBEEF);
-        ShieldedPool.ExtData memory e = _ext();
+        ShieldedPoolCore.ExtData memory e = _ext();
         vTransact.declareTrue(_pub(t, false, pool.computeContext(1, e, 0)));
         pool.transact("", t, e);
         g.spent = true;
@@ -142,7 +143,7 @@ contract PoolHandler is Test {
         if (n == 0) return;
         uint256 i = seed % n;
         if (!notes[i].spent) return;
-        ShieldedPool.TransactInputs memory t;
+        ShieldedPoolCore.TransactInputs memory t;
         t.root = pool.root();
         t.aspRoot = 777;
         t.nullifiers = [noteNullifier[i], uint256(keccak256(abi.encode("dummy-r", nonce++))) % 1e70];
@@ -150,7 +151,7 @@ contract PoolHandler is Test {
         t.publicAmount = notes[i].amount;
         t.token = address(usdc);
         t.recipient = address(0xBAD);
-        ShieldedPool.ExtData memory e = _ext();
+        ShieldedPoolCore.ExtData memory e = _ext();
         vTransact.declareTrue(_pub(t, false, pool.computeContext(1, e, 0)));
         try pool.transact("", t, e) {
             successfulReplays++;
@@ -182,7 +183,7 @@ contract PoolHandler is Test {
         if (!ok || notes[i].amount == 0) return;
         GhostNote storage g = notes[i];
         value = bound(value, 1, g.amount);
-        ShieldedPool.TransactInputs memory t;
+        ShieldedPoolCore.TransactInputs memory t;
         t.root = pool.root();
         t.aspRoot = 777;
         t.nullifiers = [noteNullifier[i], uint256(keccak256(abi.encode("dummy-a", nonce++))) % 1e70];
@@ -190,9 +191,9 @@ contract PoolHandler is Test {
         t.publicAmount = value;
         t.token = address(usdc);
         t.recipient = address(0xC0FFEE);
-        ShieldedPool.ExtData memory e = _ext();
-        ShieldedPool.Authorization3009 memory a =
-            ShieldedPool.Authorization3009(0, block.timestamp + 300, bytes32(nonce++));
+        ShieldedPoolCore.ExtData memory e = _ext();
+        ShieldedPoolCore.Authorization3009 memory a =
+            ShieldedPoolCore.Authorization3009(0, block.timestamp + 300, bytes32(nonce++));
         vTransact.declareTrue(_pub(t, true, pool.computeContext(4, e, keccak256(abi.encode(a.validAfter, a.validBefore, a.nonce)))));
         bytes32 digest = pool.authorizeTransfer("", t, e, a);
         g.spent = true;
@@ -211,7 +212,7 @@ contract PoolHandler is Test {
         if (!ok || notes[i].amount == 0) return;
         GhostNote storage g = notes[i];
         amount = bound(amount, 1, g.amount);
-        ShieldedPool.TransactInputs memory t;
+        ShieldedPoolCore.TransactInputs memory t;
         t.root = pool.root();
         t.aspRoot = 777;
         t.nullifiers = [noteNullifier[i], uint256(keccak256(abi.encode("dummy-p", nonce++))) % 1e70];
@@ -219,8 +220,8 @@ contract PoolHandler is Test {
         t.publicAmount = amount;
         t.token = address(usdc);
         t.recipient = address(this);
-        ShieldedPool.ExtData memory e = _ext();
-        ShieldedPool.PayOptions memory o;
+        ShieldedPoolCore.ExtData memory e = _ext();
+        ShieldedPoolCore.PayOptions memory o;
         o.mode = escrow ? 2 : 1;
         if (escrow) {
             o.arbiter = address(this);
