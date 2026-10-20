@@ -57,6 +57,9 @@ contract Deploy is Script {
         address weth;
         address swapRouter;
         address swapAdapter;
+        address aggregate2Verifier;
+        address aggregate4Verifier;
+        address aggregate8Verifier;
     }
 
     function run() external returns (Deployed memory d) {
@@ -71,6 +74,9 @@ contract Deploy is Script {
         d.policyPayVerifier = VerifierLinker.deploy("PolicyPayVerifier");
         d.budgetInitVerifier = VerifierLinker.deploy("BudgetInitVerifier");
         d.ragequitVerifier = VerifierLinker.deploy("RagequitVerifier");
+        d.aggregate2Verifier = VerifierLinker.deploy("Aggregate2Verifier");
+        d.aggregate4Verifier = VerifierLinker.deploy("Aggregate4Verifier");
+        d.aggregate8Verifier = VerifierLinker.deploy("Aggregate8Verifier");
 
         d.vendorRegistry = vm.envOr("VENDOR_REGISTRY", address(0));
         d.attestationRegistry = vm.envOr("ATTESTATION_REGISTRY", address(0));
@@ -108,7 +114,8 @@ contract Deploy is Script {
             IAssociationSet(d.associationSet),
             IVendorTree(d.vendorTree),
             IPoseidon2(d.poseidon2),
-            msg.sender
+            msg.sender,
+            [IHonkVerifier(d.aggregate2Verifier), IHonkVerifier(d.aggregate4Verifier), IHonkVerifier(d.aggregate8Verifier)]
         );
         d.pool = address(pool);
 
@@ -147,6 +154,10 @@ contract Deploy is Script {
         vm.serializeAddress(j, "policyPayVerifier", d.policyPayVerifier);
         vm.serializeAddress(j, "budgetInitVerifier", d.budgetInitVerifier);
         vm.serializeAddress(j, "ragequitVerifier", d.ragequitVerifier);
+        vm.serializeAddress(j, "aggregate2Verifier", d.aggregate2Verifier);
+        vm.serializeAddress(j, "aggregate4Verifier", d.aggregate4Verifier);
+        vm.serializeAddress(j, "aggregate8Verifier", d.aggregate8Verifier);
+        vm.serializeAddress(j, "aggregationModule", ShieldedPool(d.pool).aggregationModule());
         vm.serializeAddress(j, "vendorRegistry", d.vendorRegistry);
         vm.serializeAddress(j, "attestationRegistry", d.attestationRegistry);
         vm.serializeAddress(j, "vendorTree", d.vendorTree);
