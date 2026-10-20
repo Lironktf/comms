@@ -108,7 +108,76 @@ is still posted in full, which only recursive aggregation would remove.
 
 - **The Huff Poseidon2** (14.8k/hash per upstream's own benchmarks; "experimental" upstream)
   would save about 200k per spend.
-- **Recursive aggregation** (one proof for N payments, verified once on-chain): this is the big
-  lever for micropayments. Design notes are in future-research.md.
+- **Recursive aggregation** (one proof for N payments, verified once on-chain): built on branch
+  `aggregation-spike`. See the next section and aggregation.md.
 - **A shallower tree** cuts insertion cost linearly. Depth 20 is about 1M leaves (ASSUMPTION: the
   capacity a research deployment needs).
+
+## Recursive aggregation (rung 1)
+
+One aggregate proof settles N = 2, 4 or 8 payments: `pool.settleAggregated` (design and security
+argument: aggregation.md).
+- Reproduce: `npx tsx scripts/bench-aggregation.ts --runs 5` (from zk/client).
+- Raw rows: `results/aggregation-server-2026-10-20.json`.
+- Setup:
+  - Local anvil, real proofs, commit 9b1fe11.
+  - Same build server as above: Intel Haswell VM, 4 vCPU, 8 GB, Node 24.19, nargo 1.0.0-beta.25,
+    bb 5.2.1.
+  - 5 runs per N, so the reported p95 is the maximum of 5.
+- Workload: each run uses fresh payers paying 1 USDC + 0.01 fee to 3 rotating merchants, the
+  same payments as today's paths.
+
+**Everything in this table is measured** (receipt `gasUsed`, tx input length, wall clock).
+
+| N | path | L2 gas / payment (median) | calldata / payment | aggregator proving, native bb (median / p95) | latency added vs `batch` (median) |
+|---|---|---|---|---|---|
+| 1 | `transact` (today) | 1,488,590 | 9,028 B | — | — |
+| 2 | `batch` (today) | 1,199,186 | 9,154 B | — | — |
+| 2 | `settleAggregated` | **902,587** | 6,690 B | 33.9 s / 34.5 s | +33.7 s |
+| 4 | `batch` (today) | 1,066,749 | 9,105 B | — | — |
+| 4 | `settleAggregated` | **531,808** | 3,985 B | 97.6 s / 100.2 s | +96.6 s |
+| 8 | `batch` (today) | 994,238 | 9,080 B | — | — |
+| 8 | `settleAggregated` | **325,913** | 2,632 B | 224.5 s / 228.1 s | +222.1 s |
+
+- **Versus today:**
+  - At N = 8, a payment costs 78% less L2 gas than a single `transact` (1.49M → 0.33M) and 67%
+    less than in `batch` of 8 (0.99M → 0.33M).
+  - Calldata per payment falls 71% (9,028 → 2,632 B).
+  - The ~1.53M figure quoted elsewhere is a refundable `pay`. A plain `transact` measured here is
+    1.49M.
+- **Total transaction gas:** 1.81M (N=2), 2.13M (N=4), 2.61M (N=8).
+  - It breaks down as one aggregate verification (802,305 gas; Verifiers.t.sol, the same for every
+    N) plus one tree insertion plus per-payment checks, nullifier writes and events.
+  - Transfers are netted per (token, recipient).
+- **Aggregate proof:** 10,688 B for every N; the EVM verifier sees 1 public input.
+- **Proving:**
+  - The tree has 2N − 1 nodes, each a 2^21-gate circuit of ~32–35 s (native).
+    - N=8 = 4 × aggregate_2 + 2 × aggregate_4 + 1 × aggregate_8, proven one after another.
+  - Peak memory per node: 2.2 GB RSS (measured once with `/usr/bin/time`).
+  - bb.js (wasm, 4 threads) for one aggregate_2: median 39.6 s, p95 50.8 s (5 runs). That is
+    about 1.2× native.
+- **Client cost:** an aggregatable payment is proven twice (EVM + recursion target). Median
+  1.05 s, p95 1.24 s per payment (145 payments, bb.js), vs ~0.45 s for the EVM proof alone.
+- **Latency:** "latency added" is (aggregate proving + submit) − (`batch` submit) for the same N;
+  the relayer's queue window is excluded. It is all prover time. Every payment in the group waits
+  for the whole tree, because this rung proves the tree sequentially after the flush (see
+  aggregation.md, "Not covered").
+- **Circuit sizes:**
+
+  | circuit | gates |
+  |---|---|
+  | aggregate_2 (2 transact proofs + keccak of 768 B) | 1,588,737 |
+  | aggregate_4 / aggregate_8 (tree nodes) | 1,488,296 each |
+  | flat 4-proof circuit (not used) | 3,239,790 |
+  | flat 8-proof circuit (not used) | 6,524,517 |
+
+  The flat circuits are 2^22 / 2^23 circuits that this server can't prove. See aggregation.md.
+
+**Estimate, not measured: L1 data on Base.**
+- Live Sepolia receipts show ~114.6k L1 gas for a ~9.6 KB proof-carrying payment.
+- ASSUMPTION: L1 data gas scales with calldata bytes, since proof bytes are pseudorandom and
+  barely compress.
+- On that assumption, an aggregated payment at N=8 (2,632 B) would carry roughly 30–35k L1 gas.
+- To confirm, measure `l1GasUsed` on a Base Sepolia `settleAggregated` receipt (not done: this
+  rung is local-only).
+

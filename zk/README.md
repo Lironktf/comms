@@ -16,6 +16,9 @@ Base:
   carries a sealed refund slot only the payer can spend. Merchants refund by request id; escrows
   release, get claimed after a window, go to an arbiter, or expire back.
 - **Batching:** any mix of payment kinds settles in one transaction and one tree insertion.
+- **Recursive aggregation** (local only): one proof settles 2, 4 or 8 payments. That is 326k L2
+  gas per payment at N=8, vs 1.49M alone, and 2.6 KB of calldata instead of 9 KB.
+  docs/aggregation.md.
 
 Research code. **Live on Base Sepolia (testnet). Not on mainnet, no real funds. Not audited.**
 
@@ -35,6 +38,7 @@ pays a real x402 API on Base Sepolia, step by step, with Basescan links.
 | M6 private swaps + batching | done | `client/test/swap-batch.e2e.test.ts` |
 | M7 benchmarks | done (server numbers); **run on your MacBook** | docs/benchmarks.md, `npm run bench -w zk/client` |
 | Refunds + escrow + mixed batching | done | docs/refunds-escrow.md, `RefundsEscrow.t.sol` (16), `refunds-escrow.e2e.test.ts` (13), invariants |
+| Recursive aggregation (rung 1): aggregate_2/4/8 tree, `settleAggregated`, aggregating relayer | done, **local anvil only** | docs/aggregation.md, `Aggregation.t.sol` (25), `Verifiers.t.sol` (real aggregate proofs), `aggregation.e2e.test.ts` (8) |
 | Base Sepolia deployment | **live** (2026-10-17); every flow passed on-chain | docs/deploy.md §5, `client/scripts/testnet*.ts`, `benchmarks/results/base-sepolia-2026-10-17.json` |
 
 Headline numbers (build server, see docs/benchmarks.md):
@@ -143,7 +147,7 @@ npm run bench -w zk/client                         # M7 numbers for your machine
 
 Details: **docs/protocol.md** (spec) · **docs/security.md** (threat model + constraint-by-constraint
 audit + test matrix) · **docs/privacy.md** (what is and isn't hidden) · **docs/x402.md** ·
-**docs/path-b.md** · **docs/policy-and-compliance.md** · **docs/refunds-escrow.md** · **docs/benchmarks.md** ·
+**docs/path-b.md** · **docs/policy-and-compliance.md** · **docs/refunds-escrow.md** · **docs/aggregation.md** · **docs/benchmarks.md** ·
 **docs/learn-zk.md** (ZK explained through this code, with exercises) · **docs/deploy.md**
 (deploy commands and the live Sepolia runs) · **docs/future-research.md**.
 

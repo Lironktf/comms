@@ -7,5 +7,9 @@ members = [
   "policy_pay",
   "budget_init",
   "ragequit",
+  "agg",
+  "aggregate_2",
+  "aggregate_4",
+  "aggregate_8",
 ]
 default-member = "transact"

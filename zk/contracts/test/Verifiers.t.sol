@@ -10,6 +10,7 @@ import {VerifierLinker} from "../script/VerifierLinker.sol";
 /// part of the proof, is rejected. This is what makes "bound as a public input" true onchain,
 /// including inputs no circuit constraint uses (recipient, context).
 contract VerifiersTest is Test {
+    uint256 internal constant FIELD = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
     struct Fixture {
         bytes proof;
         bytes32[] publicInputs;
@@ -83,5 +84,45 @@ contract VerifiersTest is Test {
         IHonkVerifier v = IHonkVerifier(VerifierLinker.deploy("PolicyPayVerifier"));
         Fixture memory f = _load("transact");
         assertFalse(_accepts(v, f.proof, f.publicInputs));
+    }
+
+    // --- recursive aggregation (zk/docs/aggregation.md): one public input, the payments digest
+
+    function test_aggregate2() public {
+        _check("Aggregate2Verifier", "aggregate_2");
+    }
+
+    function test_aggregate4() public {
+        _check("Aggregate4Verifier", "aggregate_4");
+    }
+
+    function test_aggregate8() public {
+        _check("Aggregate8Verifier", "aggregate_8");
+    }
+
+    /// The fixture's digest is the tree the pool recomputes over the inner public inputs.
+    function test_aggregateDigestMatchesInnerPublicInputs() public view {
+        string[3] memory cs = ["aggregate_2", "aggregate_4", "aggregate_8"];
+        for (uint256 c; c < 3; ++c) {
+            string memory j = vm.readFile(string.concat("test/fixtures/", cs[c], ".json"));
+            uint256 n = 2 << c;
+            uint256[] memory level = new uint256[](n / 2);
+            for (uint256 i; i < n; i += 2) {
+                bytes32[] memory a = vm.parseJsonBytes32Array(j, string.concat(".innerPublicInputs[", vm.toString(i), "]"));
+                bytes32[] memory b = vm.parseJsonBytes32Array(j, string.concat(".innerPublicInputs[", vm.toString(i + 1), "]"));
+                level[i / 2] = uint256(keccak256(abi.encodePacked(a, b))) % FIELD;
+            }
+            for (uint256 w = n / 2; w > 1; w /= 2) {
+                for (uint256 i; i < w; i += 2) level[i / 2] = uint256(keccak256(abi.encodePacked(level[i], level[i + 1]))) % FIELD;
+            }
+            assertEq(bytes32(level[0]), vm.parseJsonBytes32Array(j, ".publicInputs")[0], cs[c]);
+        }
+    }
+
+    /// An aggregate proof for 2 payments is not accepted as one for 4 (each size has its own key).
+    function test_aggregateSizesNotInterchangeable() public {
+        IHonkVerifier v4 = IHonkVerifier(VerifierLinker.deploy("Aggregate4Verifier"));
+        Fixture memory f = _load("aggregate_2");
+        assertFalse(_accepts(v4, f.proof, f.publicInputs));
     }
 }

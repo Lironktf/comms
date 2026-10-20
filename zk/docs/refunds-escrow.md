@@ -107,8 +107,9 @@ Measured gas (anvil, real proofs; `npm run bench`, results in `benchmarks/result
   proofs, checked on-chain once.
 - Verified: nargo 1.0.0-beta.25's stdlib exposes `std::verify_proof_with_type`, the in-circuit
   verifier this needs. bb 5.2.1's `batch_verify` is for Chonk/IPA proofs, not EVM settlement.
-- Not built yet. See future-research.md for the design and its cost: aggregating adds proving
-  time on the relayer, and every payment in a batch waits for it.
+- Now built (local only): `settleAggregated`, see aggregation.md. It covers transact/pay
+  payments; `policy_pay` still settles through `batch`. It adds proving time on the relayer
+  (~34 s at N=2, ~225 s at N=8), and every payment in a group waits for it.
 
 ## Tests
 

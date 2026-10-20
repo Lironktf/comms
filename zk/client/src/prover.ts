@@ -4,7 +4,13 @@ import {readFileSync} from "node:fs";
 import {dirname, join} from "node:path";
 import {fileURLToPath} from "node:url";
 
-export type CircuitName = "transact" | "policy_pay" | "budget_init" | "ragequit" | "m0_commitment" | "m0_merkle";
+export type CircuitName =
+  | "transact" | "policy_pay" | "budget_init" | "ragequit" | "m0_commitment" | "m0_merkle"
+  | "aggregate_2" | "aggregate_4" | "aggregate_8";
+
+/** "evm": verified by the Solidity verifiers. "noir-recursive": Poseidon2 transcript, verified
+ *  inside another circuit (the aggregation tree, src/aggregator.ts). Both are zero-knowledge. */
+export type ProofTarget = "evm" | "noir-recursive";
 
 export interface Proof {
   /** raw proof bytes as 0x-hex: what the Solidity verifier's `proof` argument takes */
@@ -48,12 +54,12 @@ export class Prover {
 
   /** Run the circuit on `inputs` (fails fast with the circuit's assertion message if the
    *  statement is false), then produce the proof. */
-  async prove(name: CircuitName, inputs: InputMap): Promise<Proof> {
+  async prove(name: CircuitName, inputs: InputMap, target: ProofTarget = "evm"): Promise<Proof> {
     const c = await this.load(name);
     const t0 = performance.now();
     const {witness} = await c.noir.execute(inputs);
     const t1 = performance.now();
-    const pd = await c.backend!.generateProof(witness, {verifierTarget: "evm"});
+    const pd = await c.backend!.generateProof(witness, {verifierTarget: target});
     const t2 = performance.now();
     return {
       proof: `0x${Buffer.from(pd.proof).toString("hex")}`,
@@ -63,12 +69,12 @@ export class Prover {
   }
 
   /** Offchain verification (what a facilitator does before spending gas). */
-  async verify(name: CircuitName, proof: Pick<Proof, "proof" | "publicInputs">): Promise<boolean> {
+  async verify(name: CircuitName, proof: Pick<Proof, "proof" | "publicInputs">, target: ProofTarget = "evm"): Promise<boolean> {
     const c = await this.load(name);
     try {
       return await c.backend!.verifyProof(
         {proof: Uint8Array.from(Buffer.from(proof.proof.slice(2), "hex")), publicInputs: proof.publicInputs},
-        {verifierTarget: "evm"},
+        {verifierTarget: target},
       );
     } catch {
       return false;

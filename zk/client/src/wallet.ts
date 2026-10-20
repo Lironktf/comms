@@ -63,9 +63,11 @@ export interface SwapParams {
   data: Hex;
 }
 
+/** `recursiveProof`: the same transact statement proven with the recursion target, so a
+ *  relayer can aggregate it (src/aggregator.ts); `proof` stays the EVM proof for every other path. */
 export type Bundle =
-  | {kind: "transact"; proof: Hex; inputs: TransactInputs; ext: ExtData}
-  | {kind: "pay"; proof: Hex; inputs: TransactInputs; ext: ExtData; opts: PayOptions}
+  | {kind: "transact"; proof: Hex; inputs: TransactInputs; ext: ExtData; recursiveProof?: Hex}
+  | {kind: "pay"; proof: Hex; inputs: TransactInputs; ext: ExtData; opts: PayOptions; recursiveProof?: Hex}
   | {kind: "policyPay"; proof: Hex; inputs: PolicyInputs; ext: ExtData; opts: PayOptions}
   | {kind: "initBudget"; proof: Hex; budgetCommitment: bigint; timestamp: bigint; ext: ExtData}
   | {kind: "authorize"; proof: Hex; inputs: TransactInputs; ext: ExtData; auth: Authorization3009}
@@ -144,6 +146,9 @@ export interface WalletOptions {
   admin?: AdminKeys;
   /** clock for deadlines/timestamps (defaults to the latest block's timestamp) */
   now?: () => Promise<bigint>;
+  /** also prove payments with the recursion target, so an aggregating relayer can settle them
+   *  N per proof (docs/aggregation.md). Costs one more transact proof per payment. */
+  aggregatable?: boolean;
 }
 
 /**
@@ -420,8 +425,10 @@ export class ShieldedWallet {
       root, aspRoot: asp.root, nullifiers: [nfs[0]!, nfs[1]!], outCommitments,
       publicAmount: p.publicAmount, fee: p.fee, token: p.token, recipient: p.recipient,
     };
-    if (opts) return {kind: "pay", proof: proof.proof, inputs: pub, ext, opts};
-    return {kind: "transact", proof: proof.proof, inputs: pub, ext};
+    const aggregatable = this.opts.aggregatable && (p.kind === KIND.TRANSACT || p.kind === KIND.PAY);
+    const recursiveProof = aggregatable ? {recursiveProof: (await this.opts.prover.prove("transact", witness, "noir-recursive")).proof} : {};
+    if (opts) return {kind: "pay", proof: proof.proof, inputs: pub, ext, opts, ...recursiveProof};
+    return {kind: "transact", proof: proof.proof, inputs: pub, ext, ...recursiveProof};
   }
 
   protected selectInputs(token: Address, need: bigint, policy: bigint): (OwnedNote & {note: Note})[] {

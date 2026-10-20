@@ -1,0 +1,672 @@
+{
+ "measured": "2026-10-20T22:18:20.247Z",
+ "git": "9b1fe11",
+ "machine": {
+  "host": "server",
+  "cpu": "Intel Core Processor (Haswell, no TSX)",
+  "cores": 4,
+  "memGB": 8,
+  "os": "linux 7.0.0-14-generic x64"
+ },
+ "toolchain": {
+  "nargo": "1.0.0-beta.25",
+  "bb": "5.2.1",
+  "node": "v24.19.0"
+ },
+ "method": "local anvil, real proofs; gas = receipt gasUsed (L2 execution); calldata = tx input bytes; proving = native bb unless noted; addedLatency = (aggregate proving + submit) - (pool.batch submit) for the same N; relayer queue window excluded",
+ "runs": 5,
+ "clientProveMs": {
+  "n": 145,
+  "min": 902.2727789999917,
+  "median": 1049.873775999993,
+  "p95": 1240.4795790000353,
+  "max": 1453.824673
+ },
+ "results": {
+  "N=1": {
+   "runs": [
+    {
+     "transactGas": 1525755,
+     "transactCalldata": 9028,
+     "transactSubmitMs": 565.1864210000003
+    },
+    {
+     "transactGas": 1488590,
+     "transactCalldata": 9028,
+     "transactSubmitMs": 615.1017659999998
+    },
+    {
+     "transactGas": 1488614,
+     "transactCalldata": 9028,
+     "transactSubmitMs": 565.3429290000004
+    },
+    {
+     "transactGas": 1485481,
+     "transactCalldata": 9028,
+     "transactSubmitMs": 553.1841290000011
+    },
+    {
+     "transactGas": 1488398,
+     "transactCalldata": 9028,
+     "transactSubmitMs": 553.3833659999982
+    }
+   ],
+   "stats": {
+    "transactGas": {
+     "n": 5,
+     "min": 1485481,
+     "median": 1488590,
+     "p95": 1525755,
+     "max": 1525755
+    },
+    "transactCalldata": {
+     "n": 5,
+     "min": 9028,
+     "median": 9028,
+     "p95": 9028,
+     "max": 9028
+    },
+    "transactSubmitMs": {
+     "n": 5,
+     "min": 553.1841290000011,
+     "median": 565.1864210000003,
+     "p95": 615.1017659999998,
+     "max": 615.1017659999998
+    }
+   }
+  },
+  "N=2": {
+   "runs": [
+    {
+     "batchSubmitMs": 903.0706859999991,
+     "batchGasPerPayment": 1207765.5,
+     "batchCalldataPerPayment": 9154,
+     "aggregateProveMs": 33916.624981,
+     "step0_aggregate_2Ms": 33909.502746,
+     "aggregatedSubmitMs": 705.3305049999981,
+     "aggregatedEndToEndMs": 34623.500465,
+     "addedLatencyMs": 33720.429779,
+     "aggregatedGasPerPayment": 904227,
+     "aggregatedGasTotal": 1808454,
+     "aggregatedCalldataPerPayment": 6690,
+     "aggregateProofBytes": 10688
+    },
+    {
+     "batchSubmitMs": 944.7588180000021,
+     "batchGasPerPayment": 1199185.5,
+     "batchCalldataPerPayment": 9154,
+     "aggregateProveMs": 34511.994079,
+     "step0_aggregate_2Ms": 34509.911269000004,
+     "aggregatedSubmitMs": 642.0017590000061,
+     "aggregatedEndToEndMs": 35154.713946,
+     "addedLatencyMs": 34209.955128,
+     "aggregatedGasPerPayment": 902461,
+     "aggregatedGasTotal": 1804922,
+     "aggregatedCalldataPerPayment": 6690,
+     "aggregateProofBytes": 10688
+    },
+    {
+     "batchSubmitMs": 967.0269580000022,
+     "batchGasPerPayment": 1197673,
+     "batchCalldataPerPayment": 9154,
+     "aggregateProveMs": 33499.27291900001,
+     "step0_aggregate_2Ms": 33497.451248,
+     "aggregatedSubmitMs": 707.6964309999894,
+     "aggregatedEndToEndMs": 34207.85939900001,
+     "addedLatencyMs": 33240.832441000006,
+     "aggregatedGasPerPayment": 904245,
+     "aggregatedGasTotal": 1808490,
+     "aggregatedCalldataPerPayment": 6690,
+     "aggregateProofBytes": 10688
+    },
+    {
+     "batchSubmitMs": 938.4955980000086,
+     "batchGasPerPayment": 1199197.5,
+     "batchCalldataPerPayment": 9154,
+     "aggregateProveMs": 33955.10985899999,
+     "step0_aggregate_2Ms": 33953.06586600002,
+     "aggregatedSubmitMs": 653.5365990000137,
+     "aggregatedEndToEndMs": 34610.118185,
+     "addedLatencyMs": 33671.62258699999,
+     "aggregatedGasPerPayment": 902581,
+     "aggregatedGasTotal": 1805162,
+     "aggregatedCalldataPerPayment": 6690,
+     "aggregateProofBytes": 10688
+    },
+    {
+     "batchSubmitMs": 876.9351409999945,
+     "batchGasPerPayment": 1197691,
+     "batchCalldataPerPayment": 9154,
+     "aggregateProveMs": 32446.018742999993,
+     "step0_aggregate_2Ms": 32440.915588999982,
+     "aggregatedSubmitMs": 663.3991979999992,
+     "aggregatedEndToEndMs": 33110.33889499999,
+     "addedLatencyMs": 32233.403754,
+     "aggregatedGasPerPayment": 902587,
+     "aggregatedGasTotal": 1805174,
+     "aggregatedCalldataPerPayment": 6690,
+     "aggregateProofBytes": 10688
+    }
+   ],
+   "stats": {
+    "batchSubmitMs": {
+     "n": 5,
+     "min": 876.9351409999945,
+     "median": 938.4955980000086,
+     "p95": 967.0269580000022,
+     "max": 967.0269580000022
+    },
+    "batchGasPerPayment": {
+     "n": 5,
+     "min": 1197673,
+     "median": 1199185.5,
+     "p95": 1207765.5,
+     "max": 1207765.5
+    },
+    "batchCalldataPerPayment": {
+     "n": 5,
+     "min": 9154,
+     "median": 9154,
+     "p95": 9154,
+     "max": 9154
+    },
+    "aggregateProveMs": {
+     "n": 5,
+     "min": 32446.018742999993,
+     "median": 33916.624981,
+     "p95": 34511.994079,
+     "max": 34511.994079
+    },
+    "step0_aggregate_2Ms": {
+     "n": 5,
+     "min": 32440.915588999982,
+     "median": 33909.502746,
+     "p95": 34509.911269000004,
+     "max": 34509.911269000004
+    },
+    "aggregatedSubmitMs": {
+     "n": 5,
+     "min": 642.0017590000061,
+     "median": 663.3991979999992,
+     "p95": 707.6964309999894,
+     "max": 707.6964309999894
+    },
+    "aggregatedEndToEndMs": {
+     "n": 5,
+     "min": 33110.33889499999,
+     "median": 34610.118185,
+     "p95": 35154.713946,
+     "max": 35154.713946
+    },
+    "addedLatencyMs": {
+     "n": 5,
+     "min": 32233.403754,
+     "median": 33671.62258699999,
+     "p95": 34209.955128,
+     "max": 34209.955128
+    },
+    "aggregatedGasPerPayment": {
+     "n": 5,
+     "min": 902461,
+     "median": 902587,
+     "p95": 904245,
+     "max": 904245
+    },
+    "aggregatedGasTotal": {
+     "n": 5,
+     "min": 1804922,
+     "median": 1805174,
+     "p95": 1808490,
+     "max": 1808490
+    },
+    "aggregatedCalldataPerPayment": {
+     "n": 5,
+     "min": 6690,
+     "median": 6690,
+     "p95": 6690,
+     "max": 6690
+    },
+    "aggregateProofBytes": {
+     "n": 5,
+     "min": 10688,
+     "median": 10688,
+     "p95": 10688,
+     "max": 10688
+    }
+   }
+  },
+  "N=4": {
+   "runs": [
+    {
+     "batchSubmitMs": 1681.933852999995,
+     "batchGasPerPayment": 1071033.25,
+     "batchCalldataPerPayment": 9105,
+     "aggregateProveMs": 97612.75586900002,
+     "step0_aggregate_2Ms": 33268.02976100001,
+     "step1_aggregate_2Ms": 33302.20476599998,
+     "step2_aggregate_4Ms": 31032.475162999996,
+     "aggregatedSubmitMs": 714.2842200000305,
+     "aggregatedEndToEndMs": 98328.708756,
+     "addedLatencyMs": 96646.77490300001,
+     "aggregatedGasPerPayment": 537745,
+     "aggregatedGasTotal": 2150980,
+     "aggregatedCalldataPerPayment": 3985,
+     "aggregateProofBytes": 10688
+    },
+    {
+     "batchSubmitMs": 1729.038921999978,
+     "batchGasPerPayment": 1067538.5,
+     "batchCalldataPerPayment": 9105,
+     "aggregateProveMs": 97568.49466699996,
+     "step0_aggregate_2Ms": 34291.07298200001,
+     "step1_aggregate_2Ms": 32302.46311100002,
+     "step2_aggregate_4Ms": 30968.718044000037,
+     "aggregatedSubmitMs": 791.455559999973,
+     "aggregatedEndToEndMs": 98361.03410799999,
+     "addedLatencyMs": 96631.99518600001,
+     "aggregatedGasPerPayment": 526775,
+     "aggregatedGasTotal": 2107100,
+     "aggregatedCalldataPerPayment": 3985,
+     "aggregateProofBytes": 10688
+    },
+    {
+     "batchSubmitMs": 1696.5188900000066,
+     "batchGasPerPayment": 1066749.25,
+     "batchCalldataPerPayment": 9105,
+     "aggregateProveMs": 97684.52385799994,
+     "step0_aggregate_2Ms": 34101.61755899992,
+     "step1_aggregate_2Ms": 34050.51366299996,
+     "step2_aggregate_4Ms": 29524.41030899994,
+     "aggregatedSubmitMs": 696.4344999999739,
+     "aggregatedEndToEndMs": 98382.016344,
+     "addedLatencyMs": 96685.497454,
+     "aggregatedGasPerPayment": 531808,
+     "aggregatedGasTotal": 2127232,
+     "aggregatedCalldataPerPayment": 3985,
+     "aggregateProofBytes": 10688
+    },
+    {
+     "batchSubmitMs": 1754.870916999993,
+     "batchGasPerPayment": 1066725.25,
+     "batchCalldataPerPayment": 9105,
+     "aggregateProveMs": 100171.21116999991,
+     "step0_aggregate_2Ms": 33782.80963799998,
+     "step1_aggregate_2Ms": 34932.14805299998,
+     "step2_aggregate_4Ms": 31448.312561,
+     "aggregatedSubmitMs": 683.9913689999375,
+     "aggregatedEndToEndMs": 100856.12959899998,
+     "addedLatencyMs": 99101.25868199999,
+     "aggregatedGasPerPayment": 525958,
+     "aggregatedGasTotal": 2103832,
+     "aggregatedCalldataPerPayment": 3985,
+     "aggregateProofBytes": 10688
+    },
+    {
+     "batchSubmitMs": 1712.1787309999345,
+     "batchGasPerPayment": 1065954,
+     "batchCalldataPerPayment": 9105,
+     "aggregateProveMs": 96678.18613199994,
+     "step0_aggregate_2Ms": 32833.97169899999,
+     "step1_aggregate_2Ms": 33188.232689999975,
+     "step2_aggregate_4Ms": 30651.698986999923,
+     "aggregatedSubmitMs": 840.4230949999765,
+     "aggregatedEndToEndMs": 97519.778131,
+     "addedLatencyMs": 95807.59940000006,
+     "aggregatedGasPerPayment": 542793,
+     "aggregatedGasTotal": 2171172,
+     "aggregatedCalldataPerPayment": 3985,
+     "aggregateProofBytes": 10688
+    }
+   ],
+   "stats": {
+    "batchSubmitMs": {
+     "n": 5,
+     "min": 1681.933852999995,
+     "median": 1712.1787309999345,
+     "p95": 1754.870916999993,
+     "max": 1754.870916999993
+    },
+    "batchGasPerPayment": {
+     "n": 5,
+     "min": 1065954,
+     "median": 1066749.25,
+     "p95": 1071033.25,
+     "max": 1071033.25
+    },
+    "batchCalldataPerPayment": {
+     "n": 5,
+     "min": 9105,
+     "median": 9105,
+     "p95": 9105,
+     "max": 9105
+    },
+    "aggregateProveMs": {
+     "n": 5,
+     "min": 96678.18613199994,
+     "median": 97612.75586900002,
+     "p95": 100171.21116999991,
+     "max": 100171.21116999991
+    },
+    "step0_aggregate_2Ms": {
+     "n": 5,
+     "min": 32833.97169899999,
+     "median": 33782.80963799998,
+     "p95": 34291.07298200001,
+     "max": 34291.07298200001
+    },
+    "step1_aggregate_2Ms": {
+     "n": 5,
+     "min": 32302.46311100002,
+     "median": 33302.20476599998,
+     "p95": 34932.14805299998,
+     "max": 34932.14805299998
+    },
+    "step2_aggregate_4Ms": {
+     "n": 5,
+     "min": 29524.41030899994,
+     "median": 30968.718044000037,
+     "p95": 31448.312561,
+     "max": 31448.312561
+    },
+    "aggregatedSubmitMs": {
+     "n": 5,
+     "min": 683.9913689999375,
+     "median": 714.2842200000305,
+     "p95": 840.4230949999765,
+     "max": 840.4230949999765
+    },
+    "aggregatedEndToEndMs": {
+     "n": 5,
+     "min": 97519.778131,
+     "median": 98361.03410799999,
+     "p95": 100856.12959899998,
+     "max": 100856.12959899998
+    },
+    "addedLatencyMs": {
+     "n": 5,
+     "min": 95807.59940000006,
+     "median": 96646.77490300001,
+     "p95": 99101.25868199999,
+     "max": 99101.25868199999
+    },
+    "aggregatedGasPerPayment": {
+     "n": 5,
+     "min": 525958,
+     "median": 531808,
+     "p95": 542793,
+     "max": 542793
+    },
+    "aggregatedGasTotal": {
+     "n": 5,
+     "min": 2103832,
+     "median": 2127232,
+     "p95": 2171172,
+     "max": 2171172
+    },
+    "aggregatedCalldataPerPayment": {
+     "n": 5,
+     "min": 3985,
+     "median": 3985,
+     "p95": 3985,
+     "max": 3985
+    },
+    "aggregateProofBytes": {
+     "n": 5,
+     "min": 10688,
+     "median": 10688,
+     "p95": 10688,
+     "max": 10688
+    }
+   }
+  },
+  "N=8": {
+   "runs": [
+    {
+     "batchSubmitMs": 3319.98732700001,
+     "batchGasPerPayment": 994617.625,
+     "batchCalldataPerPayment": 9080.5,
+     "aggregateProveMs": 224545.40520000004,
+     "step0_aggregate_2Ms": 32963.87057400006,
+     "step1_aggregate_2Ms": 32726.416489999974,
+     "step2_aggregate_2Ms": 32984.609773000004,
+     "step3_aggregate_2Ms": 33715.665258999914,
+     "step4_aggregate_4Ms": 30553.12809500005,
+     "step5_aggregate_4Ms": 31246.841989000095,
+     "step6_aggregate_8Ms": 30337.543739999877,
+     "aggregatedSubmitMs": 828.5203460000921,
+     "aggregatedEndToEndMs": 225375.85567299998,
+     "addedLatencyMs": 222055.86834599997,
+     "aggregatedGasPerPayment": 325912.75,
+     "aggregatedGasTotal": 2607302,
+     "aggregatedCalldataPerPayment": 2632.5,
+     "aggregateProofBytes": 10688
+    },
+    {
+     "batchSubmitMs": 3521.4498469999526,
+     "batchGasPerPayment": 994226,
+     "batchCalldataPerPayment": 9080.5,
+     "aggregateProveMs": 227706.04505100008,
+     "step0_aggregate_2Ms": 34535.272699999856,
+     "step1_aggregate_2Ms": 32453.06885200017,
+     "step2_aggregate_2Ms": 33227.43961200002,
+     "step3_aggregate_2Ms": 33290.064619999845,
+     "step4_aggregate_4Ms": 31485.018273999915,
+     "step5_aggregate_4Ms": 32195.553277000086,
+     "step6_aggregate_8Ms": 30507.30210099998,
+     "aggregatedSubmitMs": 749.0606910001952,
+     "aggregatedEndToEndMs": 228457.20553400018,
+     "addedLatencyMs": 224935.75568700023,
+     "aggregatedGasPerPayment": 328456.25,
+     "aggregatedGasTotal": 2627650,
+     "aggregatedCalldataPerPayment": 2632.5,
+     "aggregateProofBytes": 10688
+    },
+    {
+     "batchSubmitMs": 3292.4582219999284,
+     "batchGasPerPayment": 994238,
+     "batchCalldataPerPayment": 9080.5,
+     "aggregateProveMs": 224332.04200100014,
+     "step0_aggregate_2Ms": 33149.53752000001,
+     "step1_aggregate_2Ms": 32432.819884999888,
+     "step2_aggregate_2Ms": 33398.074823,
+     "step3_aggregate_2Ms": 32785.158641000045,
+     "step4_aggregate_4Ms": 29900.027810000116,
+     "step5_aggregate_4Ms": 31351.370785000036,
+     "step6_aggregate_8Ms": 31302.361702000024,
+     "aggregatedSubmitMs": 766.801157000009,
+     "aggregatedEndToEndMs": 225100.6170969999,
+     "addedLatencyMs": 221808.15887499996,
+     "aggregatedGasPerPayment": 325517.75,
+     "aggregatedGasTotal": 2604142,
+     "aggregatedCalldataPerPayment": 2632.5,
+     "aggregateProofBytes": 10688
+    },
+    {
+     "batchSubmitMs": 3199.067066000076,
+     "batchGasPerPayment": 993877.875,
+     "batchCalldataPerPayment": 9080.5,
+     "aggregateProveMs": 224204.41355599998,
+     "step0_aggregate_2Ms": 33652.02829100005,
+     "step1_aggregate_2Ms": 32479.04783100006,
+     "step2_aggregate_2Ms": 33141.11362399999,
+     "step3_aggregate_2Ms": 31878.582219999982,
+     "step4_aggregate_4Ms": 30240.223174999934,
+     "step5_aggregate_4Ms": 31533.170134000015,
+     "step6_aggregate_8Ms": 31266.354055000003,
+     "aggregatedSubmitMs": 758.3689430002123,
+     "aggregatedEndToEndMs": 224965.67065000022,
+     "addedLatencyMs": 221766.60358400014,
+     "aggregatedGasPerPayment": 333942.75,
+     "aggregatedGasTotal": 2671542,
+     "aggregatedCalldataPerPayment": 2632.5,
+     "aggregateProofBytes": 10688
+    },
+    {
+     "batchSubmitMs": 3293.354672000278,
+     "batchGasPerPayment": 994644.625,
+     "batchCalldataPerPayment": 9080.5,
+     "aggregateProveMs": 228139.47543800017,
+     "step0_aggregate_2Ms": 32970.24443699978,
+     "step1_aggregate_2Ms": 33924.34025799995,
+     "step2_aggregate_2Ms": 34291.76039700024,
+     "step3_aggregate_2Ms": 32546.170119000133,
+     "step4_aggregate_4Ms": 30362.805236999877,
+     "step5_aggregate_4Ms": 31805.766040999908,
+     "step6_aggregate_8Ms": 32226.357257999945,
+     "aggregatedSubmitMs": 808.0259500001557,
+     "aggregatedEndToEndMs": 228949.27231799997,
+     "addedLatencyMs": 225655.9176459997,
+     "aggregatedGasPerPayment": 325887.25,
+     "aggregatedGasTotal": 2607098,
+     "aggregatedCalldataPerPayment": 2632.5,
+     "aggregateProofBytes": 10688
+    }
+   ],
+   "stats": {
+    "batchSubmitMs": {
+     "n": 5,
+     "min": 3199.067066000076,
+     "median": 3293.354672000278,
+     "p95": 3521.4498469999526,
+     "max": 3521.4498469999526
+    },
+    "batchGasPerPayment": {
+     "n": 5,
+     "min": 993877.875,
+     "median": 994238,
+     "p95": 994644.625,
+     "max": 994644.625
+    },
+    "batchCalldataPerPayment": {
+     "n": 5,
+     "min": 9080.5,
+     "median": 9080.5,
+     "p95": 9080.5,
+     "max": 9080.5
+    },
+    "aggregateProveMs": {
+     "n": 5,
+     "min": 224204.41355599998,
+     "median": 224545.40520000004,
+     "p95": 228139.47543800017,
+     "max": 228139.47543800017
+    },
+    "step0_aggregate_2Ms": {
+     "n": 5,
+     "min": 32963.87057400006,
+     "median": 33149.53752000001,
+     "p95": 34535.272699999856,
+     "max": 34535.272699999856
+    },
+    "step1_aggregate_2Ms": {
+     "n": 5,
+     "min": 32432.819884999888,
+     "median": 32479.04783100006,
+     "p95": 33924.34025799995,
+     "max": 33924.34025799995
+    },
+    "step2_aggregate_2Ms": {
+     "n": 5,
+     "min": 32984.609773000004,
+     "median": 33227.43961200002,
+     "p95": 34291.76039700024,
+     "max": 34291.76039700024
+    },
+    "step3_aggregate_2Ms": {
+     "n": 5,
+     "min": 31878.582219999982,
+     "median": 32785.158641000045,
+     "p95": 33715.665258999914,
+     "max": 33715.665258999914
+    },
+    "step4_aggregate_4Ms": {
+     "n": 5,
+     "min": 29900.027810000116,
+     "median": 30362.805236999877,
+     "p95": 31485.018273999915,
+     "max": 31485.018273999915
+    },
+    "step5_aggregate_4Ms": {
+     "n": 5,
+     "min": 31246.841989000095,
+     "median": 31533.170134000015,
+     "p95": 32195.553277000086,
+     "max": 32195.553277000086
+    },
+    "step6_aggregate_8Ms": {
+     "n": 5,
+     "min": 30337.543739999877,
+     "median": 31266.354055000003,
+     "p95": 32226.357257999945,
+     "max": 32226.357257999945
+    },
+    "aggregatedSubmitMs": {
+     "n": 5,
+     "min": 749.0606910001952,
+     "median": 766.801157000009,
+     "p95": 828.5203460000921,
+     "max": 828.5203460000921
+    },
+    "aggregatedEndToEndMs": {
+     "n": 5,
+     "min": 224965.67065000022,
+     "median": 225375.85567299998,
+     "p95": 228949.27231799997,
+     "max": 228949.27231799997
+    },
+    "addedLatencyMs": {
+     "n": 5,
+     "min": 221766.60358400014,
+     "median": 222055.86834599997,
+     "p95": 225655.9176459997,
+     "max": 225655.9176459997
+    },
+    "aggregatedGasPerPayment": {
+     "n": 5,
+     "min": 325517.75,
+     "median": 325912.75,
+     "p95": 333942.75,
+     "max": 333942.75
+    },
+    "aggregatedGasTotal": {
+     "n": 5,
+     "min": 2604142,
+     "median": 2607302,
+     "p95": 2671542,
+     "max": 2671542
+    },
+    "aggregatedCalldataPerPayment": {
+     "n": 5,
+     "min": 2632.5,
+     "median": 2632.5,
+     "p95": 2632.5,
+     "max": 2632.5
+    },
+    "aggregateProofBytes": {
+     "n": 5,
+     "min": 10688,
+     "median": 10688,
+     "p95": 10688,
+     "max": 10688
+    }
+   }
+  }
+ },
+ "wasmAggregate2": {
+  "circuit": "aggregate_2 (EVM target)",
+  "runs": [
+   40981.612909999676,
+   39454.96177899977,
+   39627.103194999974,
+   50800.66545099998,
+   39189.47895500017
+  ],
+  "stats": {
+   "n": 5,
+   "min": 39189.47895500017,
+   "median": 39627.103194999974,
+   "p95": 50800.66545099998,
+   "max": 50800.66545099998
+  }
+ }
+}
